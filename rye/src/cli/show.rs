@@ -31,6 +31,9 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     );
     println!("path: {}", style(project.root_path().display()).cyan());
     println!("venv: {}", style(project.venv_path().display()).cyan());
+    if let Some(ver) = project.target_python_version() {
+        println!("min python: {}", style(ver).cyan());
+    }
     if let Some(ver) = load_python_version() {
         println!("pinned python: {}", style(ver).cyan());
     }
