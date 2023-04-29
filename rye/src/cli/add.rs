@@ -8,13 +8,10 @@ use clap::Parser;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
 use serde::Deserialize;
-use serde_json::Value;
 use url::Url;
 
 use crate::bootstrap::ensure_self_venv;
-use crate::config::load_python_version;
 use crate::pyproject::{DependencyKind, PyProject};
-use crate::sources::PythonVersion;
 use crate::utils::{format_requirement, CommandOutput};
 
 const PACKAGE_FINDER_SCRIPT: &str = r#"
@@ -39,7 +36,6 @@ print(json.dumps(m[0].as_json()))
 struct Match {
     name: String,
     version: String,
-    link: Value,
 }
 
 #[derive(Parser, Debug)]
@@ -200,27 +196,6 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             requirement.version_or_url = Some(VersionOrUrl::VersionSpecifier(
                 VersionSpecifiers::from_str(&format!("~={}", m.version))?,
             ));
-        }
-        let requires_python = m.link.get("requires_python").unwrap();
-        if requires_python.is_null() {
-            println!(
-                "Warning: requirement{} require python version is unknown",
-                str_requirement
-            );
-        } else {
-            let python_version = load_python_version()
-                .unwrap_or_else(PythonVersion::latest_cpython)
-                .to_string();
-            let py_ver = python_version.split("@").last().unwrap();
-            let requires_py_ver = requires_python.to_string();
-            if requires_py_ver.trim_start_matches(">=").gt(py_ver) {
-                bail!(
-                    "current python_version {}, but requirement {} requires_python {}",
-                    python_version,
-                    requirement,
-                    requires_python
-                );
-            }
         }
         requirement.name = m.name;
 
