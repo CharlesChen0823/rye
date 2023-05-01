@@ -6,6 +6,11 @@ most recent changes however.
 
 ## April
 
+- Rye's `add` command now accepts a `--pre` parameter to include pre-release
+  candidates.
+
+- Rye's `pin` command now updates the pyproject.toml requires-python.
+
 - Rye's `install` command now accepts a `--include-dep` parameter to include
   scripts from one or more given dependencies.
 
