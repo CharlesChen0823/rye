@@ -1,3 +1,4 @@
+use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
@@ -5,14 +6,15 @@ use std::{env, fs};
 use anyhow::{bail, Context, Error};
 use console::style;
 use serde::{Deserialize, Serialize};
+use tempfile::tempdir;
 
-use crate::bootstrap::{ensure_self_venv, fetch};
-use crate::config::{get_py_bin, load_python_version};
+use crate::bootstrap::{ensure_self_venv, fetch, get_pip_module};
+use crate::config::get_py_bin;
 use crate::lock::{
     update_single_project_lockfile, update_workspace_lockfile, LockMode, LockOptions,
 };
 use crate::piptools::get_pip_sync;
-use crate::pyproject::PyProject;
+use crate::pyproject::{get_current_venv_python_version, PyProject};
 use crate::sources::PythonVersion;
 use crate::utils::CommandOutput;
 
@@ -69,7 +71,7 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
     let lockfile = pyproject.workspace_path().join("requirements.lock");
     let dev_lockfile = pyproject.workspace_path().join("requirements-dev.lock");
     let venv = pyproject.venv_path();
-    let py_ver = load_python_version().unwrap_or_else(PythonVersion::latest_cpython);
+    let py_ver = pyproject.venv_python_version()?;
     let output = cmd.output;
 
     // ensure we are bootstrapped
@@ -77,7 +79,7 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
 
     let mut recreate = cmd.mode == SyncMode::Full;
     if venv.is_dir() {
-        if let Some(marker_python) = pyproject.venv_python_version() {
+        if let Some(marker_python) = get_current_venv_python_version(&venv) {
             if marker_python != py_ver {
                 if cmd.output != CommandOutput::Quiet {
                     eprintln!(
@@ -192,7 +194,9 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
             if output != CommandOutput::Quiet {
                 eprintln!("Installing dependencies");
             }
-            //pyproject.venv_bin_path().join("python"));
+            let tempdir = tempdir()?;
+            symlink(get_pip_module(&self_venv), tempdir.path().join("pip"))
+                .context("failed linking pip module into for pip-sync")?;
             let mut pip_sync_cmd = Command::new(get_pip_sync(&py_ver, output)?);
             let root = pyproject.workspace_path();
             pip_sync_cmd
@@ -200,7 +204,10 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
                 // so let's make sure it is url escaped.  This is pretty hacky but
                 // good enough for now.
                 .env("PROJECT_ROOT", root.to_string_lossy().replace(' ', "%2F"))
+                .env("PYTHONPATH", tempdir.path())
                 .current_dir(&root)
+                .arg("--python-executable")
+                .arg(venv.join("bin/python"))
                 .arg("--pip-args")
                 // note that the double quotes are necessary to properly handle
                 // spaces in paths
