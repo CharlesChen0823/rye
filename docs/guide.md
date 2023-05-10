@@ -17,7 +17,7 @@ You can find a demo of `rye` [here](https://youtu.be/CyI8TBuKPF0).
 * [Install a global tool](#install-a-global-tool)
 * [Manage Rye](#manage-rye)
 
-*See [features](./features.md) for more.*
+*See [commands](./commands.md) for more.*
 
 ## Getting started
 
