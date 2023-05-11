@@ -6,6 +6,12 @@ most recent changes however.
 
 ## May
 
+- Rye's `self` command now includes a `completion` subcommand to generate
+  a completion script for your shell.
+
+- The downloaded Python distributions are now validated against the
+  SHA-256 hashes.
+
 - Rye now builds on windows.  This is even more experimental though
   than support for Linux and macOS.
 
