@@ -39,30 +39,41 @@ pub fn get_canonical_py_path(version: &PythonVersion) -> Result<PathBuf, Error> 
 pub fn get_toolchain_python_bin(version: &PythonVersion) -> Result<PathBuf, Error> {
     let mut p = get_canonical_py_path(version)?;
 
-    // It's permissible to link Python binaries directly
+    // It's permissible to link Python binaries directly in two ways.  It can either be
+    // a symlink in which case it's used directly, it can be a non-executable text file
+    // in which case the contents are the location of the interpreter, or it can be an
+    // executable file on unix.
     if p.is_file() {
-        // on windows due to limitations with symlink handling we want to make sure
-        // that we always resolve the symlink if there is one.
-        // See https://github.com/mitsuhiko/rye/issues/136
-        #[cfg(windows)]
-        {
-            return Ok(fs::canonicalize(p)?);
+        if p.is_symlink() {
+            return Ok(p.canonicalize()?);
         }
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
-            return Ok(p);
+            use std::os::unix::prelude::MetadataExt;
+            if p.metadata().map_or(false, |x| x.mode() & 0o001 != 0) {
+                return Ok(p);
+            }
         }
+        let contents = fs::read_to_string(&p).context("could not read toolchain file")?;
+        return Ok(PathBuf::from(contents.trim_end()));
+    }
+
+    // we support install/bin/python, install/python and bin/python
+    p.push("install");
+    if !p.is_dir() {
+        p.pop();
+    }
+    p.push("bin");
+    if !p.is_dir() {
+        p.pop();
     }
 
     #[cfg(unix)]
     {
-        p.push("install");
-        p.push("bin");
         p.push("python3");
     }
     #[cfg(windows)]
     {
-        p.push("install");
         p.push("python.exe");
     }
 
@@ -107,14 +118,20 @@ pub fn get_pinnable_version(req: &PythonVersionRequest) -> Option<String> {
 }
 
 /// Returns a list of all registered toolchains.
-pub fn list_known_toolchains() -> Result<Vec<PythonVersion>, Error> {
+pub fn list_known_toolchains() -> Result<Vec<(PythonVersion, PathBuf)>, Error> {
     let folder = get_app_dir().join("py");
     let mut rv = Vec::new();
     if let Ok(iter) = folder.read_dir() {
         for entry in iter {
             let entry = entry?;
-            if let Ok(ver) = entry.file_name().as_os_str().to_string_lossy().parse() {
-                rv.push(ver);
+            if let Ok(ver) = entry
+                .file_name()
+                .as_os_str()
+                .to_string_lossy()
+                .parse::<PythonVersion>()
+            {
+                let target = get_toolchain_python_bin(&ver)?;
+                rv.push((ver, target));
             }
         }
     }
@@ -183,4 +200,35 @@ pub fn get_latest_cpython() -> Result<PythonVersion, Error> {
     )
     .map(|x| x.0)
     .context("unsupported platform")
+}
+
+/// Returns the credentials data from ~/.rye.
+///
+/// The credentials file contains toml tables for various credential data.
+/// ```toml
+/// [pypi]
+/// token = ""
+/// ```
+pub fn get_credentials() -> Result<toml_edit::Document, Error> {
+    let filepath = get_credentials_filepath()?;
+
+    // If a credentials file doesn't exist create an empty one. TODO: Move to bootstrapping?
+    if !filepath.exists() {
+        fs::write(&filepath, "")?;
+    }
+
+    let doc = fs::read_to_string(&filepath)?
+        .parse::<toml_edit::Document>()
+        .with_context(|| format!("failed to parse credentials from {}", filepath.display()))?;
+
+    Ok(doc)
+}
+
+pub fn write_credentials(doc: &toml_edit::Document) -> Result<(), Error> {
+    std::fs::write(get_credentials_filepath()?, doc.to_string())
+        .context("unable to write to the credentials file")
+}
+
+pub fn get_credentials_filepath() -> Result<PathBuf, Error> {
+    Ok(get_app_dir().join("credentials"))
 }
