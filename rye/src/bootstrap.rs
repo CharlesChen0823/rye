@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::env::consts::{ARCH, OS};
+use std::env::consts::{ARCH, EXE_EXTENSION, OS};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -162,15 +162,25 @@ fn do_update(output: CommandOutput, venv_dir: &Path, app_dir: &Path) -> Result<(
         bail!("failed to initialize virtualenv (install dependencies)");
     }
     let shims = app_dir.join("shims");
-    fs::remove_dir_all(&shims).ok();
-    fs::create_dir_all(&shims).context("tried to create shim folder")?;
-    let this = env::current_exe()?;
+    if !shims.is_dir() {
+        fs::create_dir_all(&shims).context("tried to create shim folder")?;
+    }
+
+    // if rye is itself installed into the shims folder, we want to
+    // use that.  Otherwise we fall back to the current executable
+    let mut this = shims.join("rye").with_extension(EXE_EXTENSION);
+    if !this.is_file() {
+        this = env::current_exe()?;
+    }
+
     #[cfg(unix)]
     {
         let use_softlinks = !cfg!(target_os = "linux");
+        fs::remove_file(shims.join("python")).ok();
         if use_softlinks || fs::hard_link(&this, shims.join("python")).is_err() {
             symlink_file(&this, shims.join("python")).context("tried to symlink python shim")?;
         }
+        fs::remove_file(shims.join("python3")).ok();
         if use_softlinks || fs::hard_link(&this, shims.join("python3")).is_err() {
             symlink_file(&this, shims.join("python3")).context("tried to symlink python3 shim")?;
         }
@@ -179,10 +189,12 @@ fn do_update(output: CommandOutput, venv_dir: &Path, app_dir: &Path) -> Result<(
     {
         // on windows we need privileges to symlink.  Not everyone might have that, so we
         // fall back to hardlinks.
+        fs::remove_file(shims.join("python.exe")).ok();
         if symlink_file(&this, shims.join("python.exe")).is_err() {
             fs::hard_link(&this, shims.join("python.exe"))
                 .context("tried to symlink python shim")?;
         }
+        fs::remove_file(shims.join("pythonw.exe")).ok();
         if symlink_file(&this, shims.join("pythonw.exe")).is_err() {
             fs::hard_link(&this, shims.join("pythonw.exe"))
                 .context("tried to symlink pythonw shim")?;
@@ -252,20 +264,40 @@ pub fn fetch(
     fs::create_dir_all(&target_dir)
         .with_context(|| format!("failed to create target folder {}", target_dir.display()))?;
 
-    let mut archive_buffer = Vec::new();
-
     if output == CommandOutput::Verbose {
         eprintln!("download url: {}", url);
     }
     if output != CommandOutput::Quiet {
         eprintln!("{} {}", style("Downloading").cyan(), version);
     }
+    let archive_buffer = download_url(url, output)?;
 
+    if let Some(sha256) = sha256 {
+        if output != CommandOutput::Quiet {
+            eprintln!("{}", style("Checking hash").cyan());
+        }
+        check_hash(&archive_buffer, sha256)
+            .with_context(|| format!("hash check of {} failed", &url))?;
+    } else if output != CommandOutput::Quiet {
+        eprintln!("hash check skipped (no hash available)");
+    }
+
+    unpack_archive(&archive_buffer, &target_dir, 1)
+        .with_context(|| format!("unpacking of downloaded tarball {} failed", &url))?;
+
+    if output != CommandOutput::Quiet {
+        eprintln!("{} Downloaded {}", style("success:").green(), version);
+    }
+
+    Ok(version)
+}
+
+pub fn download_url(url: &str, output: CommandOutput) -> Result<Vec<u8>, Error> {
+    let mut archive_buffer = Vec::new();
     let mut handle = curl::easy::Easy::new();
     handle.url(url)?;
     handle.progress(true)?;
     handle.follow_location(true)?;
-
     let write_archive = &mut archive_buffer;
     {
         let mut transfer = handle.transfer();
@@ -301,23 +333,10 @@ pub fn fetch(
             .perform()
             .with_context(|| format!("download of {} failed", &url))?;
     }
-
-    if let Some(sha256) = sha256 {
-        if output != CommandOutput::Quiet {
-            eprintln!("{}", style("Checking hash").cyan());
-        }
-        check_hash(&archive_buffer, sha256)
-            .with_context(|| format!("hash check of {} failed", &url))?;
-    } else if output != CommandOutput::Quiet {
-        eprintln!("hash check skipped (no hash available)");
+    let code = handle.response_code()?;
+    if !(200..300).contains(&code) {
+        bail!("Failed to download: {}", code)
+    } else {
+        Ok(archive_buffer)
     }
-
-    unpack_archive(&archive_buffer, &target_dir, 1)
-        .with_context(|| format!("unpacking of downloaded tarball {} failed", &url))?;
-
-    if output != CommandOutput::Quiet {
-        eprintln!("{} Downloaded {}", style("success:").green(), version);
-    }
-
-    Ok(version)
 }
