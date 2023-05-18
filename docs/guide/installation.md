@@ -1,38 +1,50 @@
 # Installation
 
-Rye is built in Rust. There is no binary distribution yet, it only works on
-Linux and macOS as of today.  You need to have Rust and Cargo installed.  If you
-don't have, you can use [rustup](https://rustup.rs/) to get them onto your machine.
+Rye is built in Rust.  It can either be manually compiled and installed or it can
+be installed from a binary distribution yet.  It has support for Linux, macOS and
+Windows.
 
-Afterwards you can install `Rye` via `cargo`:
+## Installing Rye
 
-```bash
-cargo install --git https://github.com/mitsuhiko/rye rye
-```
+Rye is installed per-user and self manages itself.  It will install itself into
+a folder in your home directory and mange itself there.
+
+{!.includes/quick-install.md!}
 
 ## Add Shims to Path
 
-Once `rye` is installed you should also add `~/.rye/shims` into your `PATH`.
+Once `rye` is installed you need to add the `shims` folder into your `PATH`.
 This folder is a folder that contains "shims" which are executables that
-Rye manages for you.  For instance any Python installation managed by Rye
-will be available via a shim placed there.
+Rye manages for you as well as the `rye` executable itself.  For instance any
+Python installation managed by Rye will be available via a shim placed there.
 
 On macOS or Linux you can accomplish this by adding it to your `.bashrc`, `.zshrc`
-or similar.  This step is optional but required if you want to be able to
-just type `python` into the shell to pick up the current virtualenv's Python
-interpreter.  Likewise it's required if you want to take advantage of Rye's
-global tool installation feature.
+or similar.  This step is technically optional but required if you want to be able to
+just type `python` or `rye` into the shell to pick up the current virtualenv's Python
+interpreter.
 
 === "Bash"
 
+    Rye ships an `env` file which should be sourced to update `PATH` automatically.
+
     ```bash
-    echo 'export PATH="$HOME/.rye/shims:$PATH"' >> ~/.bashrc
+    echo 'source "$HOME/.rye/env"' >> ~/.bashrc
     ```
 
 === "ZSH"
 
+    Rye ships an `env` file which should be sourced to update `PATH` automatically.
+
     ```bash
-    echo 'export PATH="$HOME/.rye/shims:$PATH"' >> ~/.zshrc
+    echo 'source "$HOME/.rye/env"' >> ~/.zshrc
+    ```
+
+=== "Unix Shells"
+
+    Rye ships an `env` file which should be sourced to update `PATH` automatically.
+
+    ```bash
+    echo '. "$HOME/.rye/env"' >> ~/.profile
     ```
 
 === "Windows"
@@ -60,13 +72,38 @@ rye self update
 
 ## Uninstalling
 
-If you don't want to use Rye any more, you can use `cargo` to uninstall it again:
+If you don't want to use Rye any more, you can ask it to uninstall it again:
 
 ```bash
-cargo uninstall rye
+rye self uninstall
 ```
 
-Additionally you should delete the `.rye` folder from your home directory and
-remove `~/.rye/shims` from the `Path` again.  Rye itself does not place any data
+Additionally you should delete the remaining `.rye` folder from your home directory and
+remove `.rye/shims` from the `PATH` again.  Rye itself does not place any data
 in other locations.  Note though that virtual environments created by rye will
 no longer function after Rye was uninstalled.
+
+## Preventing Auto Installation
+
+Rye when launched will normally perform an auto installation.  This can be annoying
+in certain development situations.  This can be prevented by exporting the
+`RYE_NO_AUTO_INSTALL` environment variable.  It needs to be set to `1` to disable
+the feature.
+
+=== "Linux"
+
+    ```bash
+    export RYE_NO_AUTO_INSTALL=1
+    ```
+
+=== "macOS"
+
+    ```bash
+    export RYE_NO_AUTO_INSTALL=1
+    ```
+
+=== "Windows"
+
+    ```bash
+    set RYE_NO_AUTO_INSTALL=1
+    ```
