@@ -1,4 +1,9 @@
-# Rye
+<div align="center">
+  <img src="docs/static/favicon.svg" width="100">
+  <p><strong>Rye:</strong> An Experimental Package Management Solution for Python</p>
+</div>
+
+----
 
 Rye is [Armin's](https://github.com/mitsuhiko/) personal one-stop-shop for all
 his Python needs. It installs and manages Python installations, manages
@@ -22,6 +27,7 @@ Learn more:
 * [Documentation](https://mitsuhiko.github.io/rye)
 * [Issue Tracker](https://github.com/mitsuhiko/rye/issues)
 * [Discussions](https://github.com/mitsuhiko/rye/discussions)
+* [Discord](https://discord.gg/drbkcdtSbg)
 
 ## Usage
 
