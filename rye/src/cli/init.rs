@@ -20,6 +20,7 @@ pub enum BuildSystem {
     Hatchling,
     Setuptools,
     Filt,
+    Pdm,
 }
 
 /// Creates a new python project.
@@ -73,18 +74,24 @@ license = { text = {{ license }} }
 {%- if build_system == "hatchling" %}
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-[tool.hatch.metadata]
-allow-direct-references = true
 {%- elif build_system == "setuptools" %}
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
-{%- elif build_system == "filt" %}
+{%- elif build_system == "flit" %}
 requires = ["flit_core>=3.4"]
 build-backend = "flit_core.buildapi"
+{%- elif build_system == "pdm" %}
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 {%- endif %}
 
 [tool.rye]
 managed = true
+
+{%- if build_system == "hatchling" %}
+[tool.hatch.metadata]
+allow-direct-references = true
+{%- endif %}
 
 "#;
 
