@@ -14,8 +14,12 @@ nav:
     - Configuration: guide/config.md
     - Python Project: guide/pyproject.md
     - Syncing and Locking: guide/sync.md
+    - Dependency Sources: guide/sources.md
     - Dependencies: guide/deps.md
-    - Toolchains: guide/toolchains.md
+    - Toolchains:
+      - guide/toolchains/index.md
+      - Portable CPython: guide/toolchains/cpython.md
+      - PyPy: guide/toolchains/pypy.md
     - Tools: guide/tools.md
   - Community: community.md
   - Changelog: changelog.md
@@ -46,16 +50,17 @@ theme:
       scheme: default
       primary: custom
       toggle:
-        icon: material/toggle-switch
+        icon: octicons/sun-24
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
       toggle:
-        icon: material/toggle-switch-off-outline
+        icon: octicons/moon-24
         name: Switch to light mode
 
 markdown_extensions:
+  - attr_list
   - admonition
   - pymdownx.details
   - pymdownx.keys
@@ -67,12 +72,19 @@ markdown_extensions:
   - mdx_gh_links:
       user: mitsuhiko
       repo: rye
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
 
 plugins:
   - search
   - mkdocs-simple-hooks:
       hooks:
         on_post_build: "docs.hooks:copy_get"
+  - mkdocs-version-annotations:
+      version_added_title: 'new in **\1**'
+      version_changed_title: 'changed in **\1**'
+      version_removed_title: 'removed in **\1**'
 
 extra:
   social:

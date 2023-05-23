@@ -47,7 +47,7 @@ The virtualenv that Rye manages is placed in `.venv` next to your `pyproject.tom
 The first time you run this you will notice that Rye automatically downloaded and
 installed a compatible CPython interpreter for you.  If you have already another
 Python installation on your system it will not be used!  For more information about
-this behavior [read about toolchains](toolchains.md).
+this behavior [read about toolchains](toolchains/index.md).
 
 You can activate and work with it as normal with one notable exception: the Python
 installation in it does not contain `pip`.  If you have correctly installed Rye
@@ -69,7 +69,9 @@ Use the `add` command to add dependencies to your project.
 rye add "flask>=2.0"
 ```
 
-Note that after `add` you need to run `sync` again to actually install it.
+Note that after `add` you need to run `sync` again to actually install it.  If you
+want to add packages from custom indexes, you have to [configure the source](sources.md)
+first.
 
 ## Remove a Dependency
 

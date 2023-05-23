@@ -4,13 +4,30 @@ There is currently no actual release of Rye.  The latest main branch revision
 is the one you can install as mainline should always be stable.  Here are the
 most recent changes however.
 
-## Unreleased
+## 0.2.0
+
+_Unreleased_
+
+- Added support for custom indexes.  #199
+
+- `rye add` no longer complains when a local version information is
+  in the version.  #199
+
+## 0.1.2
+
+Released on 2023-05-22
+
+- Fixed dev-dependencies not being installed when using workspace.  #170
 
 - `init` no longer creates invalid flit config.  #195
 
-- Support direct references when add package.  #158
+- Support direct references when adding a package.  #158
+
+- Fixed a bug with uninstall on Unix platforms.  #197
 
 ## 0.1.1
+
+Released on 2023-05-18
 
 - The installer on windows will now ask for a key to be pressed so it does
   not close the window without information.  #183
@@ -19,6 +36,8 @@ most recent changes however.
   when directly piped to bash.  #184
 
 ## 0.1.0
+
+Released on 2023-05-17
 
 - Rye now comes with binary releases for some platforms.
 
