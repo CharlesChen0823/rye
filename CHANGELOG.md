@@ -59,10 +59,10 @@ Released on 2023-05-17
   `self update` command updates to the latest release version.
 
 - Rye now includes a `publish` command for publishing Python packages to a
-  package repository.  GH-86
+  package repository.  #86
 
 - Script declarations in `pyproject.toml` now permit chaining and custom
-  environment variables.  GH-153
+  environment variables.  #153
 
 - Added `tools install` and `tools uninstall` as aliases for `install` and
   `uninstall` and added `tools list` to show all installed tools.
