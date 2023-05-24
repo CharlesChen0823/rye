@@ -1,12 +1,26 @@
 # Changelog
 
-There is currently no actual release of Rye.  The latest main branch revision
-is the one you can install as mainline should always be stable.  Here are the
-most recent changes however.
+This file contains tracks the changes landing in Rye.  It includes changes
+that were not yet released.
+
+## 0.3.0
+
+_Unreleased_
+
+<!-- released start -->
 
 ## 0.2.0
 
-_Unreleased_
+Released on 2023-05-23
+
+- Resolved a bug where on Windows hitting the shift key (or some other keys)
+  in confirm prompts would cause an error.
+
+- The installer on Windows now warns if symlinks are not enabled and directs
+  the user to enable developer mode.  The `--version` output now also
+  shows if symlinks are available.  #205
+
+- Support auto fix requires-python when there is a conflict. #160
 
 - Added support for custom indexes.  #199
 
