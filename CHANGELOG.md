@@ -7,6 +7,13 @@ that were not yet released.
 
 _Unreleased_
 
+- Add username args for rye publish.  #211
+
+- The shims are now more resilient.  Previously a `pyproject.toml` file
+  caused in all cases a virtualenv to be created.  Now this will only
+  happen when the `rye.tool.managed` flag is set to `true`.  The old
+  behavior can be forced via the global config.  #212
+
 <!-- released start -->
 
 ## 0.2.0
