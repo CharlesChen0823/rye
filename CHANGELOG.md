@@ -3,9 +3,35 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.4.0
+## 0.5.0
 
 _Unreleased_
+
+- Fixed an issue where the `init` command would not let you create
+  `flit` based projects.  #254
+
+- Resolve an error ("No such file or directory") shown after updates on
+  Linux machines.  #252
+
+- The built-in updater now validates checksums of updates when updates have
+  SHA-256 hashes available.  #253
+
+- `init` now accepts `--no-pin` to not create a `.python-version` file.  #247
+
+<!-- released start -->
+
+## 0.4.0
+
+Released on 2023-05-29
+
+- Releases starting with `0.4.0` onwards are published with SHA256 checksum
+  files for all release assets.  These files are not yet validated by the
+  installer or updater however.
+
+- The `install` command can now install tools from custom indexes.  #240
+
+- Virtualenvs on Unix are now created with a hack to pre-configure TCL and
+  TKinter.  #233
 
 - Fix invalid version error when using rye init with custom toolchain.  #234
 
@@ -13,8 +39,6 @@ _Unreleased_
 
 - Correctly swap the rye executable on windows when performing an update
   to a git version via `self update`.
-
-<!-- released start -->
 
 ## 0.3.0
 
