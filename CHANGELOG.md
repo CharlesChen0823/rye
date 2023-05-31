@@ -7,6 +7,28 @@ that were not yet released.
 
 _Unreleased_
 
+- When a Python debug build (`Py_DEBUG`) is registered as custom toolchain,
+  `-dbg` is automatically appended to the name by default.  #269
+
+- lto+pgo builds are now preferred for the Python toolchain builds when
+  available.  #268
+
+- It's now possible for `.python-version` to request partial Python versions
+  in which case the latest available is used.  In particular this means that
+  a version like `3.10` can be written into `.python-version` rather than
+  `3.10.11`.  This can be accomplished by invoking `pin` with the new
+  `--relaxed` flag.  #255
+
+- Workspaces will no longer discover `pyproject.toml` files in virtualenvs
+  or `.git` folders.  #266
+
+- Adding or removing dependencies with `add` or `remove` now reformats
+  the `dependencies` array in the `pyproject.toml` file to multi-line
+  with trailing commas.  This should result in significantly better
+  diffing behavior out of the box.  #263
+
+- Default build-system and license can be specified in global config.  #244
+
 - Fixed an issue where the `init` command would not let you create
   `flit` based projects.  #254
 
