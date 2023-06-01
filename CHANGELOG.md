@@ -3,9 +3,25 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.5.0
+## 0.6.0
 
 _Unreleased_
+
+- Calling `rye init` on the root directory no longer fails.  #274
+
+<!-- released start -->
+
+## 0.5.0
+
+Released on 2023-05-31
+
+- Rye will no longer enforce a downloaded interpreter for the internal
+  toolchain.  If one has been registered that is compatible it will be
+  used.  Additionally the installer now supports the `RYE_TOOLCHAIN`
+  environment variable which allows a user to supply an already existing
+  Python interpreter at install time.  #267
+
+- The `publish` command now supports `--yes` to disable prompts.  #270
 
 - When a Python debug build (`Py_DEBUG`) is registered as custom toolchain,
   `-dbg` is automatically appended to the name by default.  #269
@@ -39,8 +55,6 @@ _Unreleased_
   SHA-256 hashes available.  #253
 
 - `init` now accepts `--no-pin` to not create a `.python-version` file.  #247
-
-<!-- released start -->
 
 ## 0.4.0
 
