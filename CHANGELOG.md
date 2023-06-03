@@ -3,13 +3,21 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.6.0
+## 0.7.0
 
 _Unreleased_
 
-- Calling `rye init` on the root directory no longer fails.  #274
-
 <!-- released start -->
+
+## 0.6.0
+
+Released on 2023-06-03
+
+- Add `version` subcommand for rye. #285
+
+- Fixed `rye pin` pinning the wrong version.  #288
+
+- Calling `rye init` on the root directory no longer fails.  #274
 
 ## 0.5.0
 
