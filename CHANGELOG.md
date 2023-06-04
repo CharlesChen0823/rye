@@ -7,6 +7,12 @@ that were not yet released.
 
 _Unreleased_
 
+- Fixed an issue where pip was not invoked from the right working directory
+  causing issues for workspace installations.  #292
+
+- `rye init` now accepts `--private` to set the `Private :: Do Not Upload` classifier
+  that prevents uploads to PyPI.  #291
+
 <!-- released start -->
 
 ## 0.6.0
@@ -18,6 +24,9 @@ Released on 2023-06-03
 - Fixed `rye pin` pinning the wrong version.  #288
 
 - Calling `rye init` on the root directory no longer fails.  #274
+
+- `rye run`, `show`, `pin`, `shell` and `build` now take a `--pyproject`
+  argument. #232
 
 ## 0.5.0
 
