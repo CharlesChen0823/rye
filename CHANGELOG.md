@@ -3,9 +3,19 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.7.0
+## 0.8.0
 
 _Unreleased_
+
+<!-- released start -->
+
+## 0.7.0
+
+Released on 2023-06-12
+
+- `rye sync` and `rye lock` now accept `--pyproject`.  #296
+
+- Added JSON output to `rye toolchain list` by adding `--format=json`.  #306
 
 - `rye version` can bump version by `--bump` option now.  #298
 
@@ -18,8 +28,6 @@ _Unreleased_
 
 - `rye init` now accepts `--private` to set the `Private :: Do Not Upload` classifier
   that prevents uploads to PyPI.  #291
-
-<!-- released start -->
 
 ## 0.6.0
 
