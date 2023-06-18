@@ -7,6 +7,28 @@ that were not yet released.
 
 _Unreleased_
 
+- Rye for now prefers `>=` over `~=` for newly added dependencies.
+
+- The workspace member declaration is now platform independent.  If `members` is
+  now explicitly set to an empty list it will not fall back to auto discovery.  #331
+
+- `rye add` now pins versions with `==` instead of `~=` when the version of the
+  package does not use at least two components.  This means that for instance it
+  will now correctly use `openai-whisper==20230314` rather than
+  `openai-whisper~=20230314` which is not actually satisfiable.  #328
+
+- `rye install` now lets you install dependencies into the tool's virtualenv
+  during installation that are undeclared via the new `--extra-requirement`
+  option.  #326
+
+- Improved handling of relative path installations by setting `PROJECT_ROOT`
+  the same way as PDM does.  #321
+
+- Workspaces will now never discover `pyproject.toml` files in any dot
+  directories. (Name starting with `.`)  #329
+
+- Fixed `rye build` not working correctly on Windows.  #327
+
 <!-- released start -->
 
 ## 0.7.0
