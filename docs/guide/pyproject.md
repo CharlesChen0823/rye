@@ -18,6 +18,26 @@ dependencies = [
 ]
 ```
 
+##  `project.scripts`
+
+This key specifies the scripts that are to be generated and installed into the virtual environment during `sync`.
+These scripts will invoke the configured entry point.
+
+```toml
+[project.scripts]
+my-hello-script = 'hello:main'
+```
+This configuration will generate a script `my-hello-script` that will call the `main` function of the
+`hello` module.
+
+Scripts can be installed using `rye sync` and run using `rye run`:
+
+```bash
+$ rye sync
+$ rye run my-hello-script
+Hello from hello!
+```
+
 ## `tool.rye.dev-dependencies`
 
 This works similar to `project.dependencies` but holds development only dependencies.  These
@@ -118,6 +138,24 @@ fails the rest of the commands won't be executed and instead the chain fails.
 lint = { chain = ["lint:black", "lint:flake8" ] }
 "lint:black" = "black --check src"
 "lint:flake8" = "flake8 src"
+```
+
+### `call`
+
+This is a special key that can be set instead of `cmd` to make a command invoke python
+functions or modules.  The format is one of the three following formats:
+
+* `<module_name>`: equivalent to `python -m <module_name>`
+* `<module_name>:<function_name>`: runs `<function_name>` from `<module_name>` and exits with the return value
+* `<module_name>:<function_name>(<args>)`: passes specific arguments to the function
+
+Extra arguments provided on the command line are passed in `sys.argv`.
+
+```toml
+[tool.rye.scripts]
+serve = { call = "http.server" }
+help = { call = "builtins:help" }
+hello-world = { call = "builtins:print('Hello World!')" }
 ```
 
 ## `tool.rye.workspace`

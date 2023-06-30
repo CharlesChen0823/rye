@@ -5,6 +5,7 @@ use clap::Parser;
 
 mod add;
 mod build;
+mod config;
 mod fetch;
 mod init;
 mod install;
@@ -46,6 +47,7 @@ struct Args {
 enum Command {
     Add(add::Args),
     Build(build::Args),
+    Config(config::Args),
     Fetch(fetch::Args),
     Init(init::Args),
     Install(install::Args),
@@ -81,7 +83,7 @@ pub fn execute() -> Result<(), Error> {
         return Ok(());
     }
 
-    let args = Args::parse();
+    let args = Args::try_parse()?;
     let cmd = if args.version {
         return print_version();
     } else if let Some(cmd) = args.command {
@@ -93,6 +95,7 @@ pub fn execute() -> Result<(), Error> {
     match cmd {
         Command::Add(cmd) => add::execute(cmd),
         Command::Build(cmd) => build::execute(cmd),
+        Command::Config(cmd) => config::execute(cmd),
         Command::Fetch(cmd) => fetch::execute(cmd),
         Command::Init(cmd) => init::execute(cmd),
         Command::Install(cmd) => install::execute(cmd),
@@ -114,14 +117,14 @@ pub fn execute() -> Result<(), Error> {
 }
 
 fn print_version() -> Result<(), Error> {
-    eprintln!("rye {}", env!("CARGO_PKG_VERSION"));
-    eprintln!("commit: {}", TESTAMENT.commit);
-    eprintln!(
+    echo!("rye {}", env!("CARGO_PKG_VERSION"));
+    echo!("commit: {}", TESTAMENT.commit);
+    echo!(
         "platform: {} ({})",
         std::env::consts::OS,
         std::env::consts::ARCH
     );
-    eprintln!("self-python: {}", SELF_PYTHON_TARGET_VERSION);
-    eprintln!("symlink support: {}", symlinks_supported());
+    echo!("self-python: {}", SELF_PYTHON_TARGET_VERSION);
+    echo!("symlink support: {}", symlinks_supported());
     Ok(())
 }

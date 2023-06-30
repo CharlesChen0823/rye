@@ -3,11 +3,40 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.9.0
+## 0.10.0
 
 _Unreleased_
 
+- Fixed a bug with `rye init` not operating correctly due to a argument conflict.  #346
+
+- Scripts now support a PDM style `call` script type.  #345
+
+- The `init` command is now capable of importing existing projects.  #265
+
+- Fixed the global shim behavior on Windows.  #344
+
 <!-- released start -->
+
+## 0.9.0
+
+Released on 2023-06-21
+
+- The internal Rye Python version is now 3.11.
+
+- Rye now emits most messages, most of the time to stdout rather than stderr.  #342
+
+- `rye add` now accepts `--pin` to let one override the type of pin to use.  #341
+
+- Added `rye config` to read and manipulate the `config.toml` file.  #339
+
+- Added support for the new `behavior.global-python` flag which turns on global
+  Python shimming.  When enabled then the `python` shim works even outside of
+  Rye managed projects.  Additionally the shim (when run outside of Rye managed
+  projects) supports a special first parameter `+VERSION` which requests a
+  specific version of Python (eg: `python +3.8` to request Python 3.8).  #336
+
+- Renamed the config key `default.dependency_operator` to `default.dependency-operator`
+  and `behavior.force_rye_managed` to `behavior.force-rye-managed`.  #338
 
 ## 0.8.0
 

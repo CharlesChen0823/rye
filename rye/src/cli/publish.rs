@@ -14,7 +14,7 @@ use url::Url;
 use crate::bootstrap::ensure_self_venv;
 use crate::platform::{get_credentials, write_credentials};
 use crate::pyproject::PyProject;
-use crate::utils::{get_venv_python_bin, CommandOutput};
+use crate::utils::{escape_string, get_venv_python_bin, CommandOutput};
 
 /// Publish packages to a package repository.
 #[derive(Parser, Debug)]
@@ -121,7 +121,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
 
         maybe_decrypt(&secret, cmd.yes)?
     } else {
-        eprintln!("No access token found, generate one at: https://pypi.org/manage/account/token/");
+        echo!("No access token found, generate one at: https://pypi.org/manage/account/token/");
         let token = if !cmd.yes {
             prompt_for_token()?
         } else {
@@ -273,8 +273,4 @@ fn pad_hex(s: String) -> String {
     } else {
         s
     }
-}
-
-fn escape_string(s: String) -> String {
-    s.trim().replace(['\\', '"'], "")
 }

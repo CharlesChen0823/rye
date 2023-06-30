@@ -4,8 +4,7 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Context, Error};
-use clap::Parser;
-use console::style;
+use clap::{Parser, ValueEnum};
 use pep440_rs::{Operator, Version, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{Requirement, VersionOrUrl};
 use serde::Deserialize;
@@ -86,6 +85,26 @@ pub struct ReqExtras {
     /// Adds a dependency with a specific feature.
     #[arg(long)]
     features: Vec<String>,
+}
+
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq)]
+enum Pin {
+    #[value(alias = "exact", alias = "==", alias = "eq")]
+    Equal,
+    #[value(alias = "tilde", alias = "compatible", alias = "~=")]
+    TildeEqual,
+    #[value(alias = ">=", alias = "ge", alias = "gte")]
+    GreaterThanEqual,
+}
+
+impl From<Pin> for Operator {
+    fn from(value: Pin) -> Self {
+        match value {
+            Pin::Equal => Operator::Equal,
+            Pin::TildeEqual => Operator::TildeEqual,
+            Pin::GreaterThanEqual => Operator::GreaterThanEqual,
+        }
+    }
 }
 
 impl ReqExtras {
@@ -178,6 +197,9 @@ pub struct Args {
     /// Include pre-releases when finding a package version.
     #[arg(long)]
     pre: bool,
+    /// Overrides the pin operator
+    #[arg(long)]
+    pin: Option<Pin>,
     /// Enables verbose diagnostics.
     #[arg(short, long)]
     verbose: bool,
@@ -207,7 +229,10 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     } else {
         DependencyKind::Normal
     };
-    let default_operator = Config::current().default_dependency_operator();
+    let default_operator = match cmd.pin {
+        Some(pin) => Operator::from(pin),
+        None => Config::current().default_dependency_operator(),
+    };
 
     for str_requirement in cmd.requirements {
         let mut requirement = Requirement::from_str(&str_requirement)?;
@@ -240,9 +265,8 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
                         )
                         .unwrap_or_default();
                         if let Some(pre) = all_pre_matches.into_iter().next() {
-                            eprintln!(
-                                "{}: {} ({}) was found considering pre-releases.  Pass --pre to allow use.",
-                                style("warning").red(),
+                            warn!(
+                                "{} ({}) was found considering pre-releases.  Pass --pre to allow use.",
                                 pre.name,
                                 pre.version.unwrap_or_default()
                             );
@@ -259,9 +283,9 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
                     }
                 } else {
                     if output != CommandOutput::Quiet {
-                        eprintln!("Available package versions:");
+                        echo!("Available package versions:");
                         for pkg in all_matches {
-                            eprintln!(
+                            echo!(
                                 "  {} ({}) requires Python {}",
                                 pkg.name,
                                 pkg.version.unwrap_or_default(),
@@ -271,7 +295,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
                                     .map_or("unknown", |x| x as &str)
                             );
                         }
-                        eprintln!("A possible solution is to raise the version in `requires-python` in `pyproject.toml`.");
+                        echo!("A possible solution is to raise the version in `requires-python` in `pyproject.toml`.");
                     }
                     bail!(
                         "did not find a version of package '{}' compatible with this version of Python.",
@@ -290,10 +314,9 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
                             // local versions or versions with only one component cannot
                             // use ~= but need to use ==.
                             match default_operator {
-                                Operator::EqualStar
-                                    if version.is_local() || version.release.len() < 2 =>
-                                {
-                                    Operator::TildeEqual
+                                _ if version.is_local() => Operator::Equal,
+                                Operator::TildeEqual if version.release.len() < 2 => {
+                                    Operator::GreaterThanEqual
                                 }
                                 ref other => other.clone(),
                             },
@@ -316,7 +339,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
 
     if output != CommandOutput::Quiet {
         for ref requirement in added {
-            println!(
+            echo!(
                 "Added {} as {} dependency",
                 format_requirement(requirement),
                 &dep_kind
