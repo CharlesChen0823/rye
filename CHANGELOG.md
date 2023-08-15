@@ -3,9 +3,46 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.10.0
+## 0.12.0
 
 _Unreleased_
+
+- The rye installer now detects `NOEXEC` temporary folders and prints out
+  a more helpful error message. #394
+
+- Fixed an issue where the author email was incorrectly detected. #382
+
+- The prompt of new virtualenvs is now set to the project name. #383
+
+<!-- released start -->
+
+## 0.11.0
+
+Released on 2023-07-18
+
+- Added a new config key `default.author` to configure the default author
+  that should be set.  This overrides the default author that is normally
+  loaded from the git config.  #377
+
+- When importing with `rye init` and no `src` folder exists, it will not be
+  created.  #375
+
+- Added support for `shell` command on Windows.  #363
+
+- Pin down pip to an older version to avoid issues with an incompatible
+  `pip-tools` version.  This does not yet update pip-tools to 7.0 as there
+  are significant regressions in 7.x. #374
+
+- The `version` command can show dynamic versions now. #355
+
+- `rye add` now properly checks some incompatible argument combinations.  #347
+
+- There is now more toolchain validation.  This better supports cases where
+  rye was interrupted during sync.  #351
+
+## 0.10.0
+
+Released on 2023-07-07
 
 - Fixed a bug with `rye init` not operating correctly due to a argument conflict.  #346
 
@@ -14,8 +51,6 @@ _Unreleased_
 - The `init` command is now capable of importing existing projects.  #265
 
 - Fixed the global shim behavior on Windows.  #344
-
-<!-- released start -->
 
 ## 0.9.0
 

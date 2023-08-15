@@ -19,7 +19,8 @@ use tempfile::tempdir;
 use crate::bootstrap::ensure_self_venv;
 use crate::config::Config;
 use crate::platform::{
-    get_default_author, get_latest_cpython_version, get_python_version_request_from_pyenv_pin,
+    get_default_author_with_fallback, get_latest_cpython_version,
+    get_python_version_request_from_pyenv_pin,
 };
 use crate::pyproject::BuildSystem;
 use crate::sources::PythonVersionRequest;
@@ -125,13 +126,13 @@ build-backend = "pdm.backend"
 [tool.rye]
 managed = true
 {%- if dev_dependencies %}
-dev_dependencies = [
+dev-dependencies = [
 {%- for dependency in dev_dependencies %}
     {{ dependency }},
 {%- endfor %}
 ]
 {%- else %}
-dev_dependencies = []
+dev-dependencies = []
 {%- endif %}
 
 {%- if build_system == "hatchling" %}
@@ -243,7 +244,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             .unwrap_or_else(|| "unknown".into())
     }));
     let version = "0.1.0";
-    let author = get_default_author();
+    let author = get_default_author_with_fallback();
     let license = match cmd.license {
         Some(license) => Some(license),
         None => cfg.default_license(),
@@ -279,6 +280,9 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
         };
         try_import_project_metadata(&mut metadata, &dir, options)?;
     }
+
+    let imported_something = metadata.name.is_some() || metadata.dependencies.is_some();
+
     // if we're missing metadata after the import we update it with what's found from normal initialization.
     if metadata.name.is_none() {
         metadata.name = Some(name);
@@ -353,7 +357,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     fs::write(&toml, rv).context("failed to write pyproject.toml")?;
 
     let src_dir = dir.join("src");
-    if !src_dir.is_dir() {
+    if !imported_something && !src_dir.is_dir() {
         let name = metadata.name.expect("project name");
         let project_dir = src_dir.join(name.replace('-', "_"));
         fs::create_dir_all(&project_dir).ok();
