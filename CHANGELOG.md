@@ -3,9 +3,45 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.12.0
+## 0.14.0
 
 _Unreleased_
+
+- The installer now detects `fish` and will spit out additional instructions
+  for configuring the shell.
+
+<!-- released start -->
+
+## 0.13.0
+
+Released on 2023-08-29
+
+- Add a `python3` shim on windows.  Previously entering `python3` in the
+  command line would always bring up the windows store python proxy even
+  when global shims were enabled.  As virtualenvs do not support the
+  `python3` executable on windows, the internal shim handling is now also
+  changed so that trying to launch `python3` will fall back to `python`.
+  This makes it possible to run `maturin build`.
+
+- Add `maturin` build command to start a new maturin PyO3 project.
+
+## 0.12.0
+
+Released on 2023-08-27
+
+- Improve handling of the pth files for TCL on pypy. #409
+
+- The `rye tools list` command now accepts `-v` to also print out the
+  versions of the installed tools. #396
+
+- Fixed parsing of versions by `rye version`. #397
+
+- Improved the help message for `rye init`. #401
+
+- The email address now defaults to a syntactically valid email address
+  if not known to prevent errors with some build tools.
+
+- Added new Python versions.
 
 - The rye installer now detects `NOEXEC` temporary folders and prints out
   a more helpful error message. #394
@@ -14,11 +50,11 @@ _Unreleased_
 
 - The prompt of new virtualenvs is now set to the project name. #383
 
-<!-- released start -->
-
 ## 0.11.0
 
 Released on 2023-07-18
+
+- Added new Python versions.
 
 - Added a new config key `default.author` to configure the default author
   that should be set.  This overrides the default author that is normally

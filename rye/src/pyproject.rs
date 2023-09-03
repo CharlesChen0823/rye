@@ -745,17 +745,22 @@ impl PyProject {
 
     /// Returns the version.
     pub fn version(&mut self) -> Result<Version, Error> {
-        let mut version = self
-            .doc
-            .get("project")
-            .and_then(|x| x.get("version"))
-            .map(|x| x.to_string());
-        if let Some(dynamic) = self.dynamic() {
-            if dynamic.contains(&"version".to_string()) {
+        let read_version = || {
+            self.doc
+                .get("project")
+                .and_then(|x| x.get("version"))
+                .and_then(|x| x.as_str().map(String::from))
+        };
+
+        let version = match self.dynamic() {
+            Some(dynamic) if dynamic.contains(&"version".to_string()) => {
                 if let Ok(metadata) = get_project_metadata(&self.root_path()) {
-                    version = Some(metadata.version);
-                };
-            };
+                    Some(metadata.version)
+                } else {
+                    read_version()
+                }
+            }
+            _ => read_version(),
         };
 
         match version {
@@ -1262,6 +1267,7 @@ pub enum BuildSystem {
     Setuptools,
     Flit,
     Pdm,
+    Maturin,
 }
 
 impl FromStr for BuildSystem {
@@ -1273,6 +1279,7 @@ impl FromStr for BuildSystem {
             "setuptools" => Ok(BuildSystem::Setuptools),
             "flit" => Ok(BuildSystem::Flit),
             "pdm" => Ok(BuildSystem::Pdm),
+            "maturin" => Ok(BuildSystem::Maturin),
             _ => Err(anyhow!("unknown build system")),
         }
     }
