@@ -15,7 +15,7 @@ pub fn init() -> Result<(), Error> {
     let home = if let Some(rye_home) = env::var_os("RYE_HOME") {
         PathBuf::from(rye_home)
     } else {
-        simple_home_dir::home_dir()
+        home::home_dir()
             .map(|x| x.join(".rye"))
             .ok_or_else(|| anyhow!("could not determine home folder"))?
     };
@@ -124,6 +124,7 @@ pub fn get_pinnable_version(req: &PythonVersionRequest, relaxed: bool) -> Option
         }
 
         // otherwise, any version we can download is an acceptable version
+        // by try to pin to something we already have.
         if target_version.is_none() {
             if let Some(version) = latest_available_python_version(req) {
                 target_version = Some(version);
@@ -229,7 +230,9 @@ pub fn get_python_version_request_from_pyenv_pin(root: &Path) -> Option<PythonVe
 /// Returns the most recent cpython release.
 pub fn get_latest_cpython_version() -> Result<PythonVersion, Error> {
     latest_available_python_version(&PythonVersionRequest {
-        kind: None,
+        name: None,
+        arch: None,
+        os: None,
         major: 3,
         minor: None,
         patch: None,

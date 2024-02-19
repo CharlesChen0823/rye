@@ -1,15 +1,11 @@
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
 
-use anyhow::{bail, Error};
+use anyhow::Error;
 use clap::Parser;
 use console::style;
 
-use crate::bootstrap::ensure_self_venv;
-use crate::consts::VENV_BIN;
 use crate::pyproject::{get_current_venv_python_version, PyProject};
-use crate::utils::{get_venv_python_bin, CommandOutput};
 
 /// Prints the current state of the project.
 #[derive(Parser, Debug)]
@@ -23,12 +19,14 @@ pub struct Args {
 }
 
 pub fn execute(cmd: Args) -> Result<(), Error> {
-    let project = PyProject::load_or_discover(cmd.pyproject.as_deref())?;
-
     if cmd.installed_deps {
-        return print_installed_deps(&project);
+        warn!("--installed-deps is deprecated, use `rye list`");
+        return crate::cli::list::execute(crate::cli::list::Args {
+            pyproject: cmd.pyproject,
+        });
     }
 
+    let project = PyProject::load_or_discover(cmd.pyproject.as_deref())?;
     echo!(
         "project: {}",
         style(project.name().unwrap_or("<unnamed>")).yellow()
@@ -46,6 +44,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             }
         }
     }
+    echo!("virtual: {}", style(project.is_virtual()).cyan());
 
     if let Some(workspace) = project.workspace() {
         echo!(
@@ -70,26 +69,20 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
         }
     }
 
-    Ok(())
-}
-
-fn print_installed_deps(project: &PyProject) -> Result<(), Error> {
-    let python = get_venv_python_bin(&project.venv_path());
-    if !python.is_file() {
-        return Ok(());
-    }
-    let self_venv = ensure_self_venv(CommandOutput::Normal)?;
-
-    let status = Command::new(self_venv.join(VENV_BIN).join("pip"))
-        .arg("--python")
-        .arg(&python)
-        .arg("freeze")
-        .env("PYTHONWARNINGS", "ignore")
-        .env("PIP_DISABLE_PIP_VERSION_CHECK", "1")
-        .status()?;
-
-    if !status.success() {
-        bail!("failed to print dependencies via pip");
+    match project.sources() {
+        Ok(mut sources) => {
+            sources.sort_by_cached_key(|x| (x.name != "default", x.name.to_string()));
+            echo!("configured sources:");
+            for source in sources {
+                echo!(
+                    "  {} ({}: {})",
+                    style(&source.name).cyan(),
+                    style(&source.ty).yellow(),
+                    style(&source.url).dim(),
+                );
+            }
+        }
+        Err(err) => echo!("invalid source config: {}", style(err).red()),
     }
 
     Ok(())

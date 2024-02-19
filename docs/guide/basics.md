@@ -1,7 +1,7 @@
 # Basics
 
 To use Rye you need to have a `pyproject.toml` based Python project.  For this guide you can
-create one with `rye init` which will create a new folder with a new project inside:
+create one with [`rye init`](commands/init.md) which will create a new folder with a new project inside:
 
 ```shell
 rye init my-project
@@ -78,6 +78,15 @@ Note that after `add` you need to run `sync` again to actually install it.  If y
 want to add packages from custom indexes, you have to [configure the source](sources.md)
 first.
 
+## Listing Dependencies
+
+You can invoke `rye list` to get a dump of all installed dependencies of your project.
+Note that this only lists dependencies that are actually installed, so make sure to `sync` first.
+
+```
+rye list
+```
+
 ## Remove a Dependency
 
 Use the `remove` command to remove a dependency from the project again.
@@ -97,7 +106,8 @@ rye sync
 rye run black
 ```
 
-To activate the virtualenv, use the standard methods:
+If you want to have the commands available directly you will need to activate the
+virtualenv like you do normally.  To activate the virtualenv, use the standard methods:
 
 === "Unix"
 
@@ -115,4 +125,14 @@ To deactivate it again run `deactivate`:
 
 ```
 deactivate
+```
+
+## Inspecting the Project
+
+The `rye show` command can print out information about the project's state.  By
+just running `rye show` you can see which Python version is used, where the
+virtualenv is located and more.
+
+```
+rye show
 ```

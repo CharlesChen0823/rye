@@ -19,7 +19,7 @@ use tempfile::tempdir;
 use crate::bootstrap::ensure_self_venv;
 use crate::config::Config;
 use crate::platform::{
-    get_default_author_with_fallback, get_latest_cpython_version,
+    get_default_author_with_fallback, get_latest_cpython_version, get_pinnable_version,
     get_python_version_request_from_pyenv_pin,
 };
 use crate::pyproject::BuildSystem;
@@ -62,6 +62,12 @@ pub struct Args {
     /// Don't import from setup.cfg, setup.py, or requirements files.
     #[arg(long)]
     no_import: bool,
+    /// Initialize this as a virtual package.
+    ///
+    /// A virtual package can have dependencies but is itself not installed as a
+    /// Python package.  It also cannot be published.
+    #[arg(long = "virtual")]
+    is_virtual: bool,
     /// Requirements files to initialize pyproject.toml with.
     #[arg(short, long, name = "REQUIREMENTS_FILE", conflicts_with = "no_import")]
     requirements: Option<Vec<PathBuf>>,
@@ -108,6 +114,11 @@ license = { text = {{ license }} }
 classifiers = ["Private :: Do Not Upload"]
 {%- endif %}
 
+[project.scripts]
+hello = {{ name_safe ~ ":hello"}}
+
+{%- if not is_virtual %}
+
 [build-system]
 {%- if build_system == "hatchling" %}
 requires = ["hatchling"]
@@ -125,9 +136,13 @@ build-backend = "pdm.backend"
 requires = ["maturin>=1.2,<2.0"]
 build-backend = "maturin"
 {%- endif %}
+{%- endif %}
 
 [tool.rye]
 managed = true
+{%- if is_virtual %}
+virtual = true
+{%- endif %}
 {%- if dev_dependencies %}
 dev-dependencies = [
 {%- for dependency in dev_dependencies %}
@@ -138,17 +153,21 @@ dev-dependencies = [
 dev-dependencies = []
 {%- endif %}
 
+{%- if not is_virtual %}
 {%- if build_system == "hatchling" %}
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = [{{ "src/" ~ name_safe }}]
 {%- elif build_system == "maturin" %}
 
 [tool.maturin]
 python-source = "python"
 module-name = {{ name_safe ~ "._lowlevel" }}
 features = ["pyo3/extension-module"]
-
+{%- endif %}
 {%- endif %}
 
 "#;
@@ -259,6 +278,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     let readme = dir.join("README.md");
     let license_file = dir.join("LICENSE.txt");
     let python_version_file = dir.join(".python-version");
+    let is_virtual = cmd.is_virtual;
 
     if toml.is_file() {
         bail!("pyproject.toml already exists");
@@ -287,7 +307,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             .map_err(|msg| anyhow!("invalid version specifier: {}", msg))?
             .contains(&py.clone().into())
     {
-        warn!("conflicted python version with project's requires-python, will auto fix it.");
+        warn!("conflicted Python version with project's requires-python, will auto fix it.");
         requires_python = format!(">= {}.{}", py.major, py.minor.unwrap_or_default());
     }
 
@@ -297,6 +317,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             .map(|x| x.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into())
     }));
+
     let version = "0.1.0";
     let author = get_default_author_with_fallback(&dir);
     let license = match cmd.license {
@@ -320,12 +341,13 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
         fs::write(&license_file, rv)?;
     }
 
+    let output = CommandOutput::from_quiet_and_verbose(cmd.quiet, cmd.verbose);
+
     // initialize with no metadata
     let mut metadata = Metadata::new();
 
     // by default rye attempts to import metadata first.
     if !cmd.no_import {
-        let output = CommandOutput::from_quiet_and_verbose(cmd.quiet, cmd.verbose);
         let options = ImportOptions {
             output,
             requirements: cmd.requirements,
@@ -364,7 +386,11 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
 
     // write .python-version
     if !cmd.no_pin && !python_version_file.is_file() {
-        fs::write(python_version_file, format!("{}\n", py))
+        // get_pinnable_version ideally doesn't fail, but if it does we fall back to
+        // the full version request.  This has the disadvantage that we might end up
+        // pinning to an architecture specific version.
+        let to_write = get_pinnable_version(&py, false).unwrap_or_else(|| py.to_string());
+        fs::write(python_version_file, format!("{}\n", to_write))
             .context("could not write .python-version file")?;
     }
 
@@ -392,7 +418,19 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     };
 
     let private = cmd.private;
-    let name_safe = metadata.name.as_ref().unwrap().replace('-', "_");
+
+    // crate a python module safe name.  This is the name on the metadata with
+    // underscores instead of dashes to form a valid python package name and in
+    // case it starts with a digit, an underscore is prepended.
+    let mut name_safe = metadata.name.as_ref().unwrap().replace('-', "_");
+    if name_safe
+        .chars()
+        .next()
+        .map_or(true, |c| c.is_ascii_digit())
+    {
+        name_safe.insert(0, '_');
+    }
+
     let is_rust = build_system == BuildSystem::Maturin;
 
     // if git init is successful prepare the local git repository
@@ -440,6 +478,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             license => metadata.license,
             dependencies => metadata.dependencies,
             dev_dependencies => metadata.dev_dependencies,
+            is_virtual,
             with_readme,
             build_system,
             private,
@@ -447,48 +486,54 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     )?;
     fs::write(&toml, rv).context("failed to write pyproject.toml")?;
 
-    let src_dir = dir.join("src");
-    if !imported_something && !src_dir.is_dir() {
-        let name = metadata.name.expect("project name");
-        if is_rust {
-            fs::create_dir_all(&src_dir).ok();
-            let project_dir = dir.join("python").join(name.replace('-', "_"));
-            fs::create_dir_all(&project_dir).ok();
-            let rv = env.render_named_str("lib.rs", LIB_RS_TEMPLATE, context! { name })?;
-            fs::write(src_dir.join("lib.rs"), rv).context("failed to write lib.rs")?;
-            let rv = env.render_named_str(
-                "Cargo.json",
-                CARGO_TOML_TEMPLATE,
-                context! {
-                    name,
-                    name_safe,
-                },
-            )?;
-            fs::write(dir.join("Cargo.toml"), rv).context("failed to write Cargo.toml")?;
-            let rv = env.render_named_str(
-                "__init__.py",
-                RUST_INIT_PY_TEMPLATE,
-                context! {
-                    name_safe
-                },
-            )?;
-            fs::write(project_dir.join("__init__.py"), rv)
-                .context("failed to write __init__.py")?;
-        } else {
-            let project_dir = src_dir.join(name.replace('-', "_"));
-            fs::create_dir_all(&project_dir).ok();
-            let rv = env.render_named_str("__init__.py", INIT_PY_TEMPLATE, context! { name })?;
-            fs::write(project_dir.join("__init__.py"), rv)
-                .context("failed to write __init__.py")?;
+    if !is_virtual {
+        let src_dir = dir.join("src");
+        if !imported_something && !src_dir.is_dir() {
+            let name = metadata.name.expect("project name");
+            if is_rust {
+                fs::create_dir_all(&src_dir).ok();
+                let project_dir = dir.join("python").join(&name_safe);
+                fs::create_dir_all(&project_dir).ok();
+                let rv = env.render_named_str("lib.rs", LIB_RS_TEMPLATE, context! { name })?;
+                fs::write(src_dir.join("lib.rs"), rv).context("failed to write lib.rs")?;
+                let rv = env.render_named_str(
+                    "Cargo.json",
+                    CARGO_TOML_TEMPLATE,
+                    context! {
+                        name,
+                        name_safe,
+                    },
+                )?;
+                fs::write(dir.join("Cargo.toml"), rv).context("failed to write Cargo.toml")?;
+                let rv = env.render_named_str(
+                    "__init__.py",
+                    RUST_INIT_PY_TEMPLATE,
+                    context! {
+                        name_safe
+                    },
+                )?;
+                fs::write(project_dir.join("__init__.py"), rv)
+                    .context("failed to write __init__.py")?;
+            } else {
+                let project_dir = src_dir.join(&name_safe);
+                fs::create_dir_all(&project_dir).ok();
+                let rv =
+                    env.render_named_str("__init__.py", INIT_PY_TEMPLATE, context! { name })?;
+                fs::write(project_dir.join("__init__.py"), rv)
+                    .context("failed to write __init__.py")?;
+            }
         }
     }
 
-    echo!(
-        "{} Initialized project in {}",
-        style("success:").green(),
-        dir.display()
-    );
-    echo!("  Run `rye sync` to get started");
+    if output != CommandOutput::Quiet {
+        echo!(
+            "{} Initialized {}project in {}",
+            style("success:").green(),
+            if is_virtual { "virtual " } else { "" },
+            dir.display()
+        );
+        echo!("  Run `rye sync` to get started");
+    }
 
     Ok(())
 }

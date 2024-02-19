@@ -4,3 +4,5 @@ target
 /x
 site
 __pycache__
+.idea
+token.txt

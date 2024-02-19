@@ -3,7 +3,6 @@ use core::fmt;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::env::consts::{ARCH, OS};
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
@@ -21,7 +20,7 @@ use crate::sync::VenvMarker;
 use crate::utils::CommandOutput;
 use crate::utils::{
     escape_string, expand_env_vars, format_requirement, get_short_executable_name, is_executable,
-    reformat_toml_array_multiline,
+    toml,
 };
 use anyhow::{anyhow, bail, Context, Error};
 use globset::GlobBuilder;
@@ -117,6 +116,15 @@ impl FromStr for SourceRefType {
     }
 }
 
+impl fmt::Display for SourceRefType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SourceRefType::Index => write!(f, "index"),
+            SourceRefType::FindLinks => write!(f, "find-links"),
+        }
+    }
+}
+
 /// Represents a source.
 pub struct SourceRef {
     pub name: String,
@@ -139,7 +147,7 @@ impl SourceRef {
         }
     }
 
-    pub fn from_toml_table(source: &Table) -> Result<SourceRef, Error> {
+    pub fn from_toml_table(source: &dyn TableLike) -> Result<SourceRef, Error> {
         let name = source
             .get("name")
             .and_then(|x| x.as_str())
@@ -272,18 +280,28 @@ impl Script {
     }
 }
 
+/// Unsafe form of [`shlex::try_quote`] for display only.
+fn shlex_quote_unsafe(s: &str) -> Cow<'_, str> {
+    shlex::Quoter::new().allow_nul(true).quote(s).unwrap()
+}
+
 impl fmt::Display for Script {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Script::Call(entry, env) => {
-                write!(f, "{}", shlex::quote(entry))?;
+                write!(f, "{}", shlex_quote_unsafe(entry))?;
                 if !env.is_empty() {
                     write!(f, " (env: ")?;
                     for (idx, (key, value)) in env.iter().enumerate() {
                         if idx > 0 {
                             write!(f, " ")?;
                         }
-                        write!(f, "{}={}", shlex::quote(key), shlex::quote(value))?;
+                        write!(
+                            f,
+                            "{}={}",
+                            shlex_quote_unsafe(key),
+                            shlex_quote_unsafe(value)
+                        )?;
                     }
                     write!(f, ")")?;
                 }
@@ -295,14 +313,19 @@ impl fmt::Display for Script {
                     if need_space {
                         write!(f, " ")?;
                     }
-                    write!(f, "{}={}", shlex::quote(key), shlex::quote(value))?;
+                    write!(
+                        f,
+                        "{}={}",
+                        shlex_quote_unsafe(key),
+                        shlex_quote_unsafe(value)
+                    )?;
                     need_space = true;
                 }
                 for arg in args.iter() {
                     if need_space {
                         write!(f, " ")?;
                     }
-                    write!(f, "{}", shlex::quote(arg))?;
+                    write!(f, "{}", shlex_quote_unsafe(arg))?;
                     need_space = true;
                 }
                 Ok(())
@@ -318,7 +341,7 @@ impl fmt::Display for Script {
                         if idx > 0 {
                             write!(f, " ")?;
                         }
-                        write!(f, "{}", shlex::quote(arg))?;
+                        write!(f, "{}", shlex_quote_unsafe(arg))?;
                     }
                     write!(f, "]")?;
                 }
@@ -494,6 +517,11 @@ impl Workspace {
     /// Is this workspace rye managed?
     pub fn rye_managed(&self) -> bool {
         is_rye_managed(&self.doc)
+    }
+
+    /// Should requirements.txt based locking include a find-links reference?
+    pub fn lock_with_sources(&self) -> bool {
+        lock_with_sources(&self.doc)
     }
 }
 
@@ -819,7 +847,7 @@ impl PyProject {
             Some(tbl) => tbl.iter().map(|x| x.0.to_string()).collect(),
             None => HashSet::new(),
         };
-        for entry in fs::read_dir(&self.venv_bin_path())
+        for entry in fs::read_dir(self.venv_bin_path())
             .ok()
             .into_iter()
             .flatten()
@@ -948,6 +976,24 @@ impl PyProject {
         }
     }
 
+    /// Is this a virtual package (does not build)
+    pub fn is_virtual(&self) -> bool {
+        self.doc
+            .get("tool")
+            .and_then(|x| x.get("rye"))
+            .and_then(|x| x.get("virtual"))
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Should requirements.txt based locking include a find-links reference?
+    pub fn lock_with_sources(&self) -> bool {
+        match self.workspace {
+            Some(ref workspace) => workspace.lock_with_sources(),
+            None => lock_with_sources(&self.doc),
+        }
+    }
+
     /// Save back changes
     pub fn save(&self) -> Result<(), Error> {
         fs::write(self.toml_path(), self.doc.to_string()).with_context(|| {
@@ -988,7 +1034,7 @@ fn set_dependency(deps: &mut Array, req: &Requirement) {
     } else {
         deps.push(formatted);
     }
-    reformat_toml_array_multiline(deps);
+    toml::reformat_array_multiline(deps);
 }
 
 fn remove_dependency(deps: &mut Array, req: &Requirement) -> Option<Requirement> {
@@ -1009,23 +1055,27 @@ fn remove_dependency(deps: &mut Array, req: &Requirement) -> Option<Requirement>
             .remove(idx)
             .as_str()
             .and_then(|x| Requirement::from_str(x).ok());
-        reformat_toml_array_multiline(deps);
+        toml::reformat_array_multiline(deps);
         rv
     } else {
         None
     }
 }
 
-pub fn get_current_venv_python_version(venv_path: &Path) -> Option<PythonVersion> {
+pub fn read_venv_marker(venv_path: &Path) -> Option<VenvMarker> {
     let marker_file = venv_path.join("rye-venv.json");
     let contents = fs::read(marker_file).ok()?;
-    let marker: VenvMarker = serde_json::from_slice(&contents).ok()?;
-    Some(marker.python)
+    serde_json::from_slice(&contents).ok()
+}
+
+pub fn get_current_venv_python_version(venv_path: &Path) -> Option<PythonVersion> {
+    read_venv_marker(venv_path).map(|x| x.python)
 }
 
 /// Give a given python version request, returns the latest available version.
 ///
-/// This can return a version that requires downloading.
+/// This can return a version that requires downloading but only if no matching
+/// Python version was found locally.
 pub fn latest_available_python_version(
     requested_version: &PythonVersionRequest,
 ) -> Option<PythonVersion> {
@@ -1044,9 +1094,13 @@ pub fn latest_available_python_version(
         Vec::new()
     };
 
-    if let Some((latest, _, _)) = get_download_url(requested_version, OS, ARCH) {
-        all.push(latest);
-    };
+    // if we don't have a match yet, try to fill it in with the latest
+    // version we are capable of fetching from the internet.
+    if all.is_empty() {
+        if let Some((latest, _, _)) = get_download_url(requested_version) {
+            all.push(latest);
+        };
+    }
 
     all.sort();
     all.into_iter().next_back()
@@ -1072,7 +1126,7 @@ fn resolve_intended_venv_python_version(
         .or_else(|| Config::current().default_toolchain().ok())
         .ok_or_else(|| {
             anyhow!(
-                "could not determine a target python version.  Define requires-python in \
+                "could not determine a target Python version.  Define requires-python in \
                  pyproject.toml or use a .python-version file"
             )
         })?;
@@ -1085,7 +1139,7 @@ fn resolve_intended_venv_python_version(
         Ok(latest)
     } else {
         Err(anyhow!(
-            "Unable to determine target virtualenv python version"
+            "Unable to determine target virtualenv Python version"
         ))
     }
 }
@@ -1161,9 +1215,10 @@ fn get_sources(doc: &Document) -> Result<Vec<SourceRef>, Error> {
         .get("tool")
         .and_then(|x| x.get("rye"))
         .and_then(|x| x.get("sources"))
-        .and_then(|x| x.as_array_of_tables())
+        .map(|x| toml::iter_tables(x))
     {
         for source in sources {
+            let source = source.context("invalid value for pyproject.toml's tool.rye.sources")?;
             let source_ref = SourceRef::from_toml_table(source)?;
             rv.push(source_ref);
         }
@@ -1192,6 +1247,14 @@ fn is_rye_managed(doc: &Document) -> bool {
         .unwrap_or(false)
 }
 
+fn lock_with_sources(doc: &Document) -> bool {
+    doc.get("tool")
+        .and_then(|x| x.get("rye"))
+        .and_then(|x| x.get("lock-with-sources"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false)
+}
+
 fn get_project_metadata(path: &Path) -> Result<Metadata, Error> {
     let self_venv = ensure_self_venv(CommandOutput::Normal)?;
     let mut metadata = Command::new(self_venv.join(VENV_BIN).join("python"));
@@ -1206,7 +1269,7 @@ fn get_project_metadata(path: &Path) -> Result<Metadata, Error> {
 /// Represents expanded sources.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExpandedSources {
-    pub index_urls: Vec<Url>,
+    pub index_urls: Vec<(Url, bool)>,
     pub find_links: Vec<Url>,
     pub trusted_hosts: HashSet<String>,
 }
@@ -1226,7 +1289,7 @@ impl ExpandedSources {
                 }
             }
             match source.ty {
-                SourceRefType::Index => index_urls.push(url),
+                SourceRefType::Index => index_urls.push((url, source.name == "default")),
                 SourceRefType::FindLinks => find_links.push(url),
             }
         }
@@ -1240,8 +1303,8 @@ impl ExpandedSources {
 
     /// Attach common pip args to a command.
     pub fn add_as_pip_args(&self, cmd: &mut Command) {
-        for (idx, url) in self.index_urls.iter().enumerate() {
-            if idx == 0 {
+        for (url, default) in self.index_urls.iter() {
+            if *default {
                 cmd.arg("--index-url");
             } else {
                 cmd.arg("--extra-index-url");
@@ -1256,6 +1319,24 @@ impl ExpandedSources {
             cmd.arg("--trusted-host");
             cmd.arg(host);
         }
+    }
+
+    /// Write the sources to a lockfile.
+    pub fn add_to_lockfile(&self, out: &mut dyn std::io::Write) -> std::io::Result<()> {
+        for (url, default) in self.index_urls.iter() {
+            if *default {
+                writeln!(out, "--index-url {}", url)?;
+            } else {
+                writeln!(out, "--extra-index-url {}", url)?;
+            }
+        }
+        for link in &self.find_links {
+            writeln!(out, "--find-links {}", link)?;
+        }
+        for host in &self.trusted_hosts {
+            writeln!(out, "--trusted-host {}", host)?;
+        }
+        Ok(())
     }
 }
 
@@ -1283,4 +1364,45 @@ impl FromStr for BuildSystem {
             _ => Err(anyhow!("unknown build system")),
         }
     }
+}
+
+/// Utility to locate projects
+pub fn locate_projects(
+    base_project: PyProject,
+    all: bool,
+    packages: &[String],
+) -> Result<Vec<PyProject>, Error> {
+    let mut projects = Vec::new();
+    if all {
+        match base_project.workspace() {
+            Some(workspace) => {
+                for project in workspace.iter_projects() {
+                    projects.push(project?);
+                }
+            }
+            None => {
+                projects.push(base_project);
+            }
+        }
+    } else if packages.is_empty() {
+        projects.push(base_project);
+    } else {
+        for package_name in packages {
+            match base_project.workspace() {
+                Some(workspace) => {
+                    if let Some(project) = workspace.get_project(package_name)? {
+                        projects.push(project);
+                    } else {
+                        bail!("unknown project '{}'", package_name);
+                    }
+                }
+                None => {
+                    if base_project.normalized_name()? != normalize_package_name(package_name) {
+                        bail!("unknown project '{}'", package_name);
+                    }
+                }
+            }
+        }
+    }
+    Ok(projects)
 }

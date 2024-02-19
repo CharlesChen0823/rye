@@ -81,6 +81,16 @@ force-rye-managed = false
 # virtual environments.
 global-python = false
 
+# When set to `true` enables experimental support of uv as a replacement
+# for pip-tools. Learn more about uv here: https://github.com/astral-sh/uv
+use-uv = false
+
+# Marks the managed .venv in a way that cloud based synchronization systems
+# like Dropbox and iCloud Files will not upload it.  This defaults to true
+# as a .venv in cloud storage typically does not make sense.  Set this to
+# `false` to disable this behavior.
+venv-mark-sync-ignore = true
+
 # a array of tables with optional sources.  Same format as in pyproject.toml
 [[sources]]
 name = "default"
@@ -97,9 +107,11 @@ keys are in dotted notation.  `--get` reads a key, `--set`, `--set-int`,
 
 ```bash
 rye config --set proxy.http=http://127.0.0.1:4000
-rye config --set-bool behavior.rye-force-managed=true
+rye config --set-bool behavior.force-rye-managed=true
 rye config --get default.requires-python
 ```
+
+For more information see [`config`](commands/config.md).
 
 ## Per Project Config
 

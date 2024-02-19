@@ -3,16 +3,19 @@ hide:
   - navigation
 ---
 
-# Rye: An Experimental Package Management Solution for Python
+<div style="text-align: center">
+  <img src="static/logo-auto.svg" style="width: 64px; margin-bottom: 10px">
+  <h1><strong>Rye:</strong> a Hassle-Free Python Experience</h1>
+</div>
 
-Rye is [Armin's](https://github.com/mitsuhiko) personal one-stop-shop for all
-his Python needs.  It installs and manages Python installations, helps working with
-`pyproject.toml` files, installs and uninstalls dependencies, creates and updates
-virtualenvs behind the scenes.  It supports monorepos and global tool installations.
+Rye is a comprehensive project and package management solution for Python.
+Born from [its creator's](https://github.com/mitsuhiko) desire to establish a
+one-stop-shop for all Python users, Rye provides a unified experience to install and manages Python
+installations, `pyproject.toml` based projects, dependencies and virtualenvs
+seamlessly.  It's designed to accommodate complex projects, monorepos and to
+facilitate global tool installations.  Curious? [Watch an introduction](https://youtu.be/q99TYA7LnuA).
 
-Rye is an experimental endeavour to build a new type of packaging experience to
-Python inspired by `rustup` and `cargo` from Rust.  It's **not yet production ready**
-but feedback and suggestions are greatly appreciated.
+A hassle-free experience for Python developers at every level.
 
 <script async defer src="https://buttons.github.io/buttons.js"></script>
 <p align="center">
@@ -21,7 +24,7 @@ but feedback and suggestions are greatly appreciated.
   <a class="github-button" href="https://github.com/sponsors/mitsuhiko" data-size="large" data-icon="octicon-heart" data-color-scheme="light" aria-label="Sponsor @mitsuhiko on GitHub">Sponsor</a>
 </p>
 
-??? abstract "Installation Instructions"
+!!! abstract "Installation Instructions"
 
     {% include-markdown ".includes/quick-install.md" %}
 

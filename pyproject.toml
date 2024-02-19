@@ -1,10 +1,8 @@
 [project]
 name = "rye-dev"
-version = "0.1.0"
+version = "1.0.0"
 description = "Workspace for rye development"
-authors = [
-    { name = "Armin Ronacher", email = "armin.ronacher@active-4.com" }
-]
+authors = [{ name = "Armin Ronacher", email = "armin.ronacher@active-4.com" }]
 dependencies = [
     "mkdocs~=1.4.3",
     "mkdocs-material~=9.1.12",
@@ -21,6 +19,9 @@ requires-python = ">= 3.8"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["dummy"]
+
 [tool.rye]
 managed = true
 
@@ -28,3 +29,4 @@ managed = true
 serve-docs = "mkdocs serve"
 
 [tool.rye.workspace]
+members = ["rye-devtools"]

@@ -33,7 +33,7 @@ rye add --optional=web flask
 rye lock --features=web
 ```
 
-When working with workspaces, the package name needs to be prefixed with a slash:
+When working with [workspaces](../workspaces/), the package name needs to be prefixed with a slash:
 
 ```
 rye lock --features=package-name/feature-name
@@ -53,6 +53,23 @@ do want to include those, pass `--pre`
 
 ```
 rye lock Flask --pre
+```
+
+### `--with-sources`
+
++++ 0.18.0
+
+By default (unless the `tool.rye.lock-with-sources` config key is set to `true` in the
+`pyproject.toml`) lock files are not generated with source references.  This means that
+if custom sources are used the lock file cannot be installed via `pip` unless also
+`--find-links` and other parameters are manually passed.  This can be particularly useful
+when the lock file is used for docker image builds.
+
+When this flag is passed then the lock file is generated with references to `--index-url`,
+`--extra-index-url` or `--find-links`.
+
+```
+rye lock --with-sources
 ```
 
 ## Sync

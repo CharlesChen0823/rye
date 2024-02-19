@@ -3,9 +3,200 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.14.0
+## 0.25.0
 
 _Unreleased_
+
+- Improved the error message if `config` is invoked without arguments.  #660
+
+- Bump `uv` to 0.1.3.  #665, #675
+
+- When `uv` is enabled, `rye add` now uses `uv` instead of `unearth`
+  internally.  #667
+
+- The installer now has slightly better wording for what the shims are doing.  #669
+
+- `uv` can now also be enabled on windows.  #675
+
+- Removed the unsupported and un-used `arch` parameter from `fetch`.  #681
+
+- Fixed the `-q` parameter not working for the `init` command.  #686
+
+<!-- released start -->
+
+## 0.24.0
+
+Released on 2024-02-15
+
+- Added new `rye list` command and deprecated `rye show --installed-deps` which it replaces.  #656
+
+- Added experimental support for `uv`.  #657
+
+## 0.23.0
+
+Released on 2024-02-13
+
+- When `behavior.venv-mark-sync-ignore` is set to `false` and the file system
+  does not support extended attributes, no longer will a warning be printed.  #633
+
+- Fixed a bug that caused warnings about unsupported operations to be shown on Linux. #634
+
+- The venv sync marker is now only updated when a new virtualenv is created.  #638
+
+- Lockfiles now contain annotations.  #643
+
+## 0.22.0
+
+Released on 2024-02-09
+
+- Virtual envs managed by Rye will now by default be marked to not sync to
+  known cloud storage systems (Dropbox and iCloud).  #589
+
+- Fixed a bug where pip-tools sometimes did not get initialized.  #596
+
+- Rye now prefers installed toolchains over newer latest toolchains unless
+  a precise pin is used.  #598
+
+- Removed the non functional `shell` command.  #602
+
+- Upgraded internal unearth dependency which resolved an issue where
+  `rye add tensorflow` would not work.  #614
+
+- The installer now supports `RYE_TOOLCHAIN_VERSION`.  #606
+
+- `rye init` will no longer create packages with leading digits.  #616
+
+- Rye now statically links `vcruntime` on Windows which no longer requires
+  the vs redist to be installed.  #622
+
+- `rye show` now prints out which sources are configured for a project.  #631
+
+## 0.21.0
+
+Released on 2024-02-03
+
+- `rye fetch` now is able to fetch impliciit version in all cases.  Previously
+  global shims were not properly defaulted which required the user to be explicit
+  with the fetch request.  #574
+
+- The rye installer now prompts for the default toolchain version if global shims
+  are enabled.  #576
+
+- The internal Python version was bumped to 3.12.  #576
+
+- The installer now can automatically add Rye to `PATH` on most UNIX environments.  #580
+
+## 0.20.0
+
+Released on 2024-02-01
+
+- Improved the error message when an update could not be performed because files
+  are in use.  #550
+
+- Rye now supports virtual projects.  These are themselves not installed into the
+  virtualenv but their dependencies are.  #551
+
+- Update the Python internals (python external dependencies) to new versions.  #553
+
+- Update to newer versions of pip tools.  For Python 3.7 `6.14.0` is used, for
+  new Python versions `7.3.0` is used.  #554
+
+- Added `rye fmt` and `rye lint` commands to format and lint with
+  the help of Ruff.  #555
+
+- Restore cursor state on Ctrl-C.  This fixes some issues where in rare cases the
+  cursor would disappear even after shutting down rye.  #564
+
+- Upon installation Rye now prompts if global shims should be enabled.  #566
+
+- Add a warning about bugs to the `shell` command until the behavior has been
+  fixed.  #567
+
+## 0.19.0
+
+Released on 2024-01-21
+
+- Improved the behavior of `rye fetch`.  When invoked without arguments it will now try to
+  fetch the version of the requested Python interpreter.  Specifically this combining
+  `pin` and `fetch` work in a much simplified manner.  #545
+
+- Fixed an issue where `rye init` would pin a much too specific version in the `.python-version`
+  file that is generated.  #545
+
+- On Windows the `PATH` is now automatically adjusted on install and uninstall.  This means that
+  manually adding the rye folder to the search path is no longer necessary.  #483
+
+- Fixed a regression in 0.18 that caused the `add` command to fail.  #547
+
+## 0.18.0
+
+Released on 2024-01-20
+
+- Incorporate new Python builds.  #535
+
+- Disable revocation checks on windows to support corporate MITM proxies.  #537
+
+- Detect when a virtualenv relocates and automatically re-create it on sync.  #538
+
+- Added `lock --with-sources`, `sync --with-sources` and the new `rye.tool.lock-with-sources`
+  config.  Passing this will ensure that source references are included in the
+  lock files.  #540
+
+- When using global python shims, the `.python-version` file is now correctly
+  picked up in all cases.  #541
+
+- Added a helpful message if someone attempts to run the non existing `rye list`
+  command.  At a later point there should be a real listing command that can print
+  out the dependencies.  Today the only option is the `--installed-deps` option on
+  the `show` command which spits out dependencies in the format of the lockfile.  #543
+
+- The installer will no longer attempt to symlink targets which are not valid
+  executables on the platform.  This works around some issues with Packages that
+  would prevent to install such as `changedetection.io`.  #542
+
+## 0.17.0
+
+Released on 2024-01-15
+
+- Fixed default generated script reference.  #527
+
+- Correctly fall back to home folder if HOME is unset.  #533 
+
+## 0.16.0
+
+Released on 2023-12-17
+
+- By default a script with the name of the project is now also configured.  #519
+
+- Rye now configures hatchling better in `rye init` so that it works with
+  hatchling 1.19 and later.  #521
+
+- Rye now detects the dummy Python shim that starts the windows store and
+  refuses to consider it.  #486
+
+## 0.15.2
+
+Released on 2023-10-04
+
+- Fixed the updater not replacing the python shim correctly on Linux.
+
+## 0.15.1
+
+Released on 2023-10-03
+
+- Fixed the updater not replacing the python3 shim correctly.
+
+## 0.15.0
+
+Released on 2023-10-03
+
+- Added support for Python 3.12.  #462
+
+## 0.14.0
+
+Released on 2023-10-01
+
+- Add support for fetching alternative CPU architectures.  #447
 
 - The order of git submodule initialization was changed.  This improves the
   automatic author detection when `includeIf` is used.  #443
@@ -19,7 +210,7 @@ _Unreleased_
 - The installer now detects `fish` and will spit out additional instructions
   for configuring the shell.
 
-<!-- released start -->
+- Fix the wrong behavior when bump version.  #454
 
 ## 0.13.0
 

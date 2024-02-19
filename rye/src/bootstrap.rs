@@ -1,12 +1,12 @@
 use std::borrow::Cow;
-use std::env::consts::{ARCH, EXE_EXTENSION, OS};
+use std::env::consts::EXE_EXTENSION;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{self, AtomicBool};
 use std::{env, fs};
 
-use anyhow::{bail, Context, Error};
+use anyhow::{anyhow, bail, Context, Error};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
@@ -14,10 +14,12 @@ use tempfile::NamedTempFile;
 
 use crate::config::Config;
 use crate::consts::VENV_BIN;
+use crate::piptools::LATEST_PIP;
 use crate::platform::{
     get_app_dir, get_canonical_py_path, get_toolchain_python_bin, list_known_toolchains,
     symlinks_supported,
 };
+use crate::pyproject::latest_available_python_version;
 use crate::sources::{get_download_url, PythonVersion, PythonVersionRequest};
 use crate::utils::{
     check_checksum, get_venv_python_bin, set_proxy_variables, symlink_file, unpack_archive,
@@ -26,33 +28,36 @@ use crate::utils::{
 
 /// this is the target version that we want to fetch
 pub const SELF_PYTHON_TARGET_VERSION: PythonVersionRequest = PythonVersionRequest {
-    kind: Some(Cow::Borrowed("cpython")),
+    name: Some(Cow::Borrowed("cpython")),
+    arch: None,
+    os: None,
     major: 3,
-    minor: Some(11),
+    minor: Some(12),
     patch: None,
     suffix: None,
 };
 
-const SELF_VERSION: u64 = 4;
+const SELF_VERSION: u64 = 12;
 
 const SELF_REQUIREMENTS: &str = r#"
-build==0.10.0
-certifi==2022.12.7
-charset-normalizer==3.1.0
-click==8.1.3
-distlib==0.3.6
-filelock==3.12.0
+build==1.0.3
+certifi==2023.11.17
+charset-normalizer==3.3.2
+click==8.1.7
+distlib==0.3.8
+filelock==3.12.2
 idna==3.4
 packaging==23.1
-pip-tools==6.13.0
-platformdirs==3.4.0
+platformdirs==4.0.0
 pyproject_hooks==1.0.0
-requests==2.29.0
+requests==2.31.0
 tomli==2.0.1
 twine==4.0.2
-unearth==0.9.0
-urllib3==1.26.15
-virtualenv==20.22.0
+unearth==0.14.0
+urllib3==2.0.7
+virtualenv==20.25.0
+ruff==0.1.14
+uv==0.1.3
 "#;
 
 static FORCED_TO_UPDATE: AtomicBool = AtomicBool::new(false);
@@ -68,6 +73,14 @@ fn is_up_to_date() -> bool {
 
 /// Bootstraps the venv for rye itself
 pub fn ensure_self_venv(output: CommandOutput) -> Result<PathBuf, Error> {
+    ensure_self_venv_with_toolchain(output, None)
+}
+
+/// Bootstraps the venv for rye itself
+pub fn ensure_self_venv_with_toolchain(
+    output: CommandOutput,
+    toolchain_version_request: Option<PythonVersionRequest>,
+) -> Result<PathBuf, Error> {
     let app_dir = get_app_dir();
     let venv_dir = app_dir.join("self");
     let pip_tools_dir = app_dir.join("pip-tools");
@@ -91,12 +104,22 @@ pub fn ensure_self_venv(output: CommandOutput) -> Result<PathBuf, Error> {
         echo!("Bootstrapping rye internals");
     }
 
-    let version = ensure_self_toolchain(output).with_context(|| {
-        format!(
-            "failed to fetch internal cpython toolchain {}",
-            SELF_PYTHON_TARGET_VERSION
-        )
-    })?;
+    let version = match toolchain_version_request {
+        Some(ref version_request) => ensure_specific_self_toolchain(output, version_request)
+            .with_context(|| {
+                format!(
+                    "failed to provision internal cpython toolchain {}",
+                    version_request
+                )
+            })?,
+        None => ensure_latest_self_toolchain(output).with_context(|| {
+            format!(
+                "failed to fetch internal cpython toolchain {}",
+                SELF_PYTHON_TARGET_VERSION
+            )
+        })?,
+    };
+
     let py_bin = get_toolchain_python_bin(&version)?;
 
     // linux specific detection of shared libraries.
@@ -120,9 +143,14 @@ pub fn ensure_self_venv(output: CommandOutput) -> Result<PathBuf, Error> {
     venv_cmd.arg(&venv_dir);
     set_proxy_variables(&mut venv_cmd);
 
-    let status = venv_cmd
-        .status()
-        .with_context(|| format!("unable to create self venv using {}", py_bin.display()))?;
+    let status = venv_cmd.status().with_context(|| {
+        format!(
+            "unable to create self venv using {}. It might be that \
+             the used Python build is incompatible with this machine. \
+             For more information see https://rye-up.com/guide/installation/",
+            py_bin.display()
+        )
+    })?;
     if !status.success() {
         bail!("failed to initialize virtualenv in {}", venv_dir.display());
     }
@@ -145,9 +173,11 @@ fn do_update(output: CommandOutput, venv_dir: &Path, app_dir: &Path) -> Result<(
     pip_install_cmd.arg("-mpip");
     pip_install_cmd.arg("install");
     pip_install_cmd.arg("--upgrade");
-    // pin to a specific pip version to work around a bug with pip-tools.  Fix this
-    // once 7.0.0 is stable.  https://github.com/mitsuhiko/rye/issues/368
-    pip_install_cmd.arg("pip==23.1");
+
+    // This pip is only used for shim usage and is known to not support 3.7.  pip-tools
+    // use their own local pip versions that are compatible.
+    pip_install_cmd.arg(LATEST_PIP);
+
     if output == CommandOutput::Verbose {
         pip_install_cmd.arg("--verbose");
     } else {
@@ -210,6 +240,7 @@ pub fn update_core_shims(shims: &Path, this: &Path) -> Result<(), Error> {
         // for instance is needed when the rye executable is placed on a different volume
         // than ~/.rye/shims
         if cfg!(target_os = "linux") {
+            fs::remove_file(shims.join("python")).ok();
             if fs::hard_link(this, shims.join("python")).is_err() {
                 fs::copy(this, shims.join("python")).context("tried to copy python shim")?;
             }
@@ -222,6 +253,7 @@ pub fn update_core_shims(shims: &Path, this: &Path) -> Result<(), Error> {
         } else {
             fs::remove_file(shims.join("python")).ok();
             symlink_file(this, shims.join("python")).context("tried to symlink python shim")?;
+            fs::remove_file(shims.join("python3")).ok();
             symlink_file(this, shims.join("python3")).context("tried to symlink python3 shim")?;
         }
     }
@@ -296,26 +328,62 @@ pub fn get_pip_module(venv: &Path) -> Result<PathBuf, Error> {
     Ok(rv)
 }
 
-/// we only support cpython 3.9 to 3.11
+/// we only support cpython 3.9 to 3.12
 pub fn is_self_compatible_toolchain(version: &PythonVersion) -> bool {
-    version.kind == "cpython" && version.major == 3 && version.minor >= 9 && version.minor < 12
+    version.name == "cpython" && version.major == 3 && version.minor >= 9 && version.minor <= 12
 }
 
-fn ensure_self_toolchain(output: CommandOutput) -> Result<PythonVersion, Error> {
-    let possible_versions = list_known_toolchains()?
+/// Ensure that the toolchain for the self environment is available.
+fn ensure_latest_self_toolchain(output: CommandOutput) -> Result<PythonVersion, Error> {
+    if let Some(version) = list_known_toolchains()?
         .into_iter()
         .map(|x| x.0)
         .filter(is_self_compatible_toolchain)
-        .collect::<Vec<_>>();
-
-    if let Some(version) = possible_versions.into_iter().max() {
-        echo!(
-            "Found a compatible python version: {}",
-            style(&version).cyan()
-        );
+        .collect::<Vec<_>>()
+        .into_iter()
+        .max()
+    {
+        if output != CommandOutput::Quiet {
+            echo!(
+                "Found a compatible Python version: {}",
+                style(&version).cyan()
+            );
+        }
         Ok(version)
     } else {
         fetch(&SELF_PYTHON_TARGET_VERSION, output)
+    }
+}
+
+/// Ensure a specific toolchain is available.
+fn ensure_specific_self_toolchain(
+    output: CommandOutput,
+    toolchain_version_request: &PythonVersionRequest,
+) -> Result<PythonVersion, Error> {
+    let toolchain_version = latest_available_python_version(toolchain_version_request)
+        .ok_or_else(|| anyhow!("requested toolchain version is not available"))?;
+    if !is_self_compatible_toolchain(&toolchain_version) {
+        bail!(
+            "the requested toolchain version ({}) is not supported for rye-internal usage",
+            toolchain_version
+        );
+    }
+    if !get_toolchain_python_bin(&toolchain_version)?.is_file() {
+        if output != CommandOutput::Quiet {
+            echo!(
+                "Fetching requested internal toolchain '{}'",
+                toolchain_version
+            );
+        }
+        fetch(&toolchain_version.into(), output)
+    } else {
+        if output != CommandOutput::Quiet {
+            echo!(
+                "Found a compatible Python version: {}",
+                style(&toolchain_version).cyan()
+            );
+        }
+        Ok(toolchain_version)
     }
 }
 /// Fetches a version if missing.
@@ -333,7 +401,7 @@ pub fn fetch(
         }
     }
 
-    let (version, url, sha256) = match get_download_url(version, OS, ARCH) {
+    let (version, url, sha256) = match get_download_url(version) {
         Some(result) => result,
         None => bail!("unknown version {}", version),
     };
@@ -404,6 +472,14 @@ pub fn download_url_ignore_404(url: &str, output: CommandOutput) -> Result<Optio
     // we only do https requests here, so we always set an https proxy
     if let Some(proxy) = config.https_proxy_url() {
         handle.proxy(&proxy)?;
+    }
+
+    // on windows we want to disable revocation checks.  The reason is that MITM proxies
+    // will otherwise not work.  This is a schannel specific behavior anyways.
+    // for more information see https://github.com/curl/curl/issues/264
+    #[cfg(windows)]
+    {
+        handle.ssl_options(curl::easy::SslOpt::new().no_revoke(true))?;
     }
 
     let write_archive = &mut archive_buffer;

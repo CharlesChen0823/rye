@@ -30,7 +30,7 @@ my-hello-script = 'hello:main'
 This configuration will generate a script `my-hello-script` that will call the `main` function of the
 `hello` module.
 
-Scripts can be installed using `rye sync` and run using `rye run`:
+Scripts can be installed using [`rye sync`](commands/sync.md) and run using [`rye run`](commands/run.md):
 
 ```bash
 $ rye sync
@@ -60,6 +60,20 @@ pulled in as indirect dependencies.  These are added here automatically with `ry
 excluded-dependencies = ["cffi"]
 ```
 
+## `tool.rye.lock-with-sources`
+
++++ 0.18.0
+
+When this flag is enabled all `lock` and `sync` operations in the project or workspace
+operate as if `--with-sources` is passed.  This means that all lock files contain the
+full source references.  Note that this can create lock files that contain credentials
+if the sources have credentials included in the URL.
+
+```toml
+[tool.rye]
+lock-with-sources = true
+```
+
 ## `tool.rye.managed`
 
 +++ 0.3.0
@@ -74,6 +88,23 @@ can be forced enabled in the global config.
 managed = true
 ```
 
+## `tool.rye.virtual`
+
++++ 0.20.0
+
+If this key is set to `true` the project is declared as a virtual project.  This is a special
+mode in which the package itself is not installed, but only the dependencies are.  This is
+for instance useful if you are not creating a Python project, but you are depending on Python
+software.  As an example you can use this to install software written in Python.  This key is
+set to true when `rye init` is invoked with the `--virtual` flag.
+
+```toml
+[tool.rye]
+virtual = true
+```
+
+For more information consult the [Virtual Project Guide](../virtual/).
+
 ## `tool.rye.sources`
 
 This is an array of tables with sources that should be used for locating dependencies.
@@ -81,7 +112,7 @@ This lets you use indexes other than PyPI.  These sources can also be configured
 main `config.toml` config file with the same syntax.
 
 ```toml
-[[sources]]
+[[tool.rye.sources]]
 name = "default"
 url = "http://pypi.org/simple/"
 ```
@@ -160,13 +191,15 @@ hello-world = { call = "builtins:print('Hello World!')" }
 
 ## `tool.rye.workspace`
 
-When a table with that key is stored, then a project is declared to be a workspace root.  By
-default all Python projects discovered in sub folders will then become members of this workspace
-and share a virtualenv.  Optionally the `members` key (an array) can be used to restrict these
-members.  In that list globs can be used.  The root project itself is always a member.
+When a table with that key is stored, then a project is declared to be a
+[workspace](../workspaces/) root.  By default all Python projects discovered in
+sub folders will then become members of this workspace and share a virtualenv.
+Optionally the `members` key (an array) can be used to restrict these members.
+In that list globs can be used.  The root project itself is always a member.
 
 ```toml
 [tool.rye.workspace]
 members = ["mylib-*"]
 ```
 
+For more information consult the [Workspaces Guide](../workspaces/).
