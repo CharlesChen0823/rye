@@ -14,12 +14,12 @@ pub struct Args {
 /// List all registered tools
 #[derive(Parser, Debug)]
 pub struct ListCommand {
-    /// Also how all the scripts installed by the tools.
-    #[arg(short, long)]
+    /// Show all the scripts installed by the tools.
+    #[arg(short = 's', long)]
     include_scripts: bool,
     /// Show the version of tools.
-    #[arg(short, long)]
-    version_show: bool,
+    #[arg(short = 'v', long)]
+    include_version: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -40,11 +40,19 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
 
 fn list_tools(cmd: ListCommand) -> Result<(), Error> {
     let mut tools = list_installed_tools()?.into_iter().collect::<Vec<_>>();
-    tools.sort();
+    tools.sort_by_key(|(tool, _)| tool.clone());
 
     for (tool, mut info) in tools {
-        if cmd.version_show {
-            echo!("{} {}", style(tool).cyan(), style(info.version).cyan());
+        if !info.valid {
+            echo!("{} ({})", style(tool).red(), style("seems broken").red());
+            continue;
+        }
+        if cmd.include_version {
+            if let Some(ref venv) = info.venv_marker {
+                echo!("{} {} ({})", style(tool).cyan(), info.version, venv.python);
+            } else {
+                echo!("{} {}", style(tool).cyan(), info.version);
+            }
         } else {
             echo!("{}", style(tool).cyan());
         }

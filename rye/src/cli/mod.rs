@@ -30,6 +30,7 @@ mod version;
 use git_testament::git_testament;
 
 use crate::bootstrap::SELF_PYTHON_TARGET_VERSION;
+use crate::config::Config;
 use crate::platform::symlinks_supported;
 
 git_testament!(TESTAMENT);
@@ -131,7 +132,7 @@ pub fn execute() -> Result<(), Error> {
         Command::List(cmd) => list::execute(cmd),
         Command::Shell(..) => {
             bail!(
-                "unknown command. The shell command was removed. Activate the virtualenv instead with '{}' instead.",
+                "unknown command. The shell command was removed. Activate the virtualenv with '{}' instead.",
                 if cfg!(windows) {
                     ".venv\\Scripts\\activate"
                 } else {
@@ -152,5 +153,6 @@ fn print_version() -> Result<(), Error> {
     );
     echo!("self-python: {}", SELF_PYTHON_TARGET_VERSION);
     echo!("symlink support: {}", symlinks_supported());
+    echo!("uv enabled: {}", Config::current().use_uv());
     Ok(())
 }
