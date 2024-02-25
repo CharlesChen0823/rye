@@ -3,11 +3,21 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.26.0
+## 0.27.0
 
 _Unreleased_
 
-- Bumped `uv` to 0.1.6. #719
+<!-- released start -->
+
+## 0.26.0
+
+Released on 2024-02-23
+
+- `init` now supports `--script` and `--lib` to generate a script or library project.  #738
+
+- Fixed `rye config --show-path` abort with an error. #706
+
+- Bumped `uv` to 0.1.9.  #719, #740, #746
 
 - Bumped `ruff` to 0.2.2.  #700
 
@@ -20,8 +30,6 @@ _Unreleased_
 - When `uv` is enabled, rye will now automatically sync on `add` and `remove`.  #677
 
 - Rename `rye tools list` flags: `-i, --include-scripts` to `-s, --include-scripts` and `-v, --version-show` to `-v, --include-version`.  #722
-
-<!-- released start -->
 
 ## 0.25.0
 

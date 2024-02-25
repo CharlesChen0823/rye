@@ -22,7 +22,7 @@ use crate::cli::toolchain::register_toolchain;
 use crate::config::Config;
 use crate::platform::{get_app_dir, symlinks_supported};
 use crate::sources::{get_download_url, PythonVersionRequest};
-use crate::utils::{check_checksum, toml, tui_theme, CommandOutput, QuietExit};
+use crate::utils::{check_checksum, toml, tui_theme, CommandOutput, IoPathContext, QuietExit};
 
 #[cfg(windows)]
 const DEFAULT_HOME: &str = "%USERPROFILE%\\.rye";
@@ -313,7 +313,7 @@ fn install(args: InstallCommand) -> Result<(), Error> {
 
 fn remove_dir_all_if_exists(path: &Path) -> Result<(), Error> {
     if path.is_dir() {
-        fs::remove_dir_all(path)?;
+        fs::remove_dir_all(path).path_context(path, "failed to remove directory")?;
     }
     Ok(())
 }
@@ -388,9 +388,15 @@ fn uninstall(args: UninstallCommand) -> Result<(), Error> {
 }
 
 #[cfg(unix)]
-fn is_fish() -> bool {
-    use whattheshell::Shell;
-    Shell::infer().map_or(false, |x| matches!(x, Shell::Fish))
+fn has_fish() -> bool {
+    use which::which;
+    which("fish").is_ok()
+}
+
+#[cfg(unix)]
+fn has_zsh() -> bool {
+    use which::which;
+    which("zsh").is_ok()
 }
 
 fn perform_install(
@@ -542,9 +548,9 @@ fn perform_install(
     // place executable in rye home folder
     fs::create_dir_all(&shims).ok();
     if target.is_file() {
-        fs::remove_file(&target)?;
+        fs::remove_file(&target).path_context(&target, "failed to delete old executable")?;
     }
-    fs::copy(exe, &target)?;
+    fs::copy(&exe, &target).path_context(&exe, "failed to copy executable")?;
     echo!("Installed binary to {}", style(target.display()).cyan());
 
     // write an env file we can source later.  Prefer $HOME/.rye over
@@ -554,10 +560,9 @@ fn perform_install(
         .unwrap_or((false, Cow::Borrowed(DEFAULT_HOME)));
 
     if cfg!(unix) {
-        fs::write(
-            app_dir.join("env"),
-            render!(UNIX_ENV_FILE, custom_home, rye_home),
-        )?;
+        let env_path = app_dir.join("env");
+        fs::write(&env_path, render!(UNIX_ENV_FILE, custom_home, rye_home))
+            .path_context(&env_path, "failed to write env file")?;
     }
 
     // Register a toolchain if provided.
@@ -666,7 +671,13 @@ fn add_rye_to_path(mode: &InstallMode, shims: &Path, ask: bool) -> Result<(), Er
             echo!();
             echo!("    source \"{}/env\"", rye_home.display());
             echo!();
-            if is_fish() {
+            if has_zsh() {
+                echo!("To make it work with zsh, you might need to add this to your .zprofile:");
+                echo!();
+                echo!("    source \"{}/env\"", rye_home.display());
+                echo!();
+            }
+            if has_fish() {
                 echo!("To make it work with fish, run this once instead:");
                 echo!();
                 echo!(

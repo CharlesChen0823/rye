@@ -16,6 +16,8 @@ pub const INSTA_FILTERS: &[(&str, &str)] = &[
         r"(\b[A-Z]:)?[\\/].*?[\\/]\.rye-tests---[^\\/]+[\\/]",
         "[TEMP_PATH]/",
     ),
+    // home
+    (r"(\b[A-Z]:)?[\\/].*?[\\/]rye-test-home", "[RYE_HOME]"),
     // macos temp folder
     (r"/var/folders/\S+?/T/\S+", "[TEMP_FILE]"),
     // linux temp folders
@@ -23,7 +25,7 @@ pub const INSTA_FILTERS: &[(&str, &str)] = &[
     // windows temp folders
     (r"\b[A-Z]:\\.*\\Local\\Temp\\\S+", "[TEMP_FILE]"),
     (r" in (\d+\.)?\d+(ms|s)\b", " in [EXECUTION_TIME]"),
-    (r"\\([\w\d.])", "/$1"),
+    (r"\\\\?([\w\d.])", "/$1"),
     (r"rye.exe", "rye"),
 ];
 
@@ -147,6 +149,12 @@ impl Space {
         fs::create_dir_all(p.parent().unwrap()).ok();
         fs::write(p, doc.to_string()).unwrap();
         rv
+    }
+
+    #[allow(unused)]
+    pub fn read_toml<P: AsRef<Path>>(&self, path: P) -> toml_edit::Document {
+        let p = self.project_path().join(path.as_ref());
+        std::fs::read_to_string(&p).unwrap().parse().unwrap()
     }
 
     #[allow(unused)]
