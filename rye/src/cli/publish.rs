@@ -42,6 +42,9 @@ pub struct Args {
     /// Path to alternate CA bundle.
     #[arg(long)]
     cert: Option<PathBuf>,
+    /// Skip files that have already been published (only applies to repositories supporting this feature)
+    #[arg(long)]
+    skip_existing: bool,
     /// Skip prompts.
     #[arg(short, long)]
     yes: bool,
@@ -56,16 +59,17 @@ pub struct Args {
 pub fn execute(cmd: Args) -> Result<(), Error> {
     let output = CommandOutput::from_quiet_and_verbose(cmd.quiet, cmd.verbose);
     let venv = ensure_self_venv(output)?;
-    let project = PyProject::discover()?;
-
-    if project.is_virtual() {
-        bail!("virtual packages cannot be published");
-    }
 
     // Get the files to publish.
     let files = match cmd.dist {
         Some(paths) => paths,
-        None => vec![project.workspace_path().join("dist").join("*")],
+        None => {
+            let project = PyProject::discover()?;
+            if project.is_virtual() {
+                bail!("virtual packages cannot be published");
+            }
+            vec![project.workspace_path().join("dist").join("*")]
+        }
     };
 
     // a. Get token from arguments and offer encryption, then store in credentials file.
@@ -112,7 +116,6 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
         let maybe_encrypted = maybe_encrypt(&secret, cmd.yes)?;
         let maybe_encoded = maybe_encode(&secret, &maybe_encrypted);
         credentials[repository]["token"] = Item::Value(maybe_encoded.expose_secret().into());
-        write_credentials(&credentials)?;
 
         secret
     } else if let Some(token) = credentials
@@ -166,6 +169,9 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
     }
     if let Some(cert) = cmd.cert {
         publish_cmd.arg("--cert").arg(cert);
+    }
+    if cmd.skip_existing {
+        publish_cmd.arg("--skip-existing");
     }
 
     if output == CommandOutput::Quiet {

@@ -62,7 +62,7 @@ pub fn get_canonical_py_path(version: &PythonVersion) -> Result<PathBuf, Error> 
 
 /// Returns the path of the python binary for the given version.
 pub fn get_toolchain_python_bin(version: &PythonVersion) -> Result<PathBuf, Error> {
-    let mut p = get_canonical_py_path(version)?;
+    let p = get_canonical_py_path(version)?;
 
     // It's permissible to link Python binaries directly in two ways.  It can either be
     // a symlink in which case it's used directly, it can be a non-executable text file
@@ -83,26 +83,31 @@ pub fn get_toolchain_python_bin(version: &PythonVersion) -> Result<PathBuf, Erro
         return Ok(PathBuf::from(contents.trim_end()));
     }
 
+    Ok(get_python_bin_within(&p))
+}
+
+/// Returns the path to the python binary within the path.
+pub fn get_python_bin_within(path: &Path) -> PathBuf {
+    let mut path = path.to_path_buf();
     // we support install/bin/python, install/python and bin/python
-    p.push("install");
-    if !p.is_dir() {
-        p.pop();
+    path.push("install");
+    if !path.is_dir() {
+        path.pop();
     }
-    p.push("bin");
-    if !p.is_dir() {
-        p.pop();
+    path.push("bin");
+    if !path.is_dir() {
+        path.pop();
     }
 
     #[cfg(unix)]
     {
-        p.push("python3");
+        path.push("python3");
     }
     #[cfg(windows)]
     {
-        p.push("python.exe");
+        path.push("python.exe");
     }
-
-    Ok(p)
+    path
 }
 
 /// Returns a pinnable version for this version request.
@@ -249,7 +254,7 @@ pub fn get_latest_cpython_version() -> Result<PythonVersion, Error> {
 /// [pypi]
 /// token = ""
 /// ```
-pub fn get_credentials() -> Result<toml_edit::Document, Error> {
+pub fn get_credentials() -> Result<toml_edit::DocumentMut, Error> {
     let filepath = get_credentials_filepath()?;
 
     // If a credentials file doesn't exist create an empty one. TODO: Move to bootstrapping?
@@ -258,13 +263,13 @@ pub fn get_credentials() -> Result<toml_edit::Document, Error> {
     }
 
     let doc = fs::read_to_string(&filepath)?
-        .parse::<toml_edit::Document>()
+        .parse::<toml_edit::DocumentMut>()
         .path_context(&filepath, "failed to parse credentials")?;
 
     Ok(doc)
 }
 
-pub fn write_credentials(doc: &toml_edit::Document) -> Result<(), Error> {
+pub fn write_credentials(doc: &toml_edit::DocumentMut) -> Result<(), Error> {
     let path = get_credentials_filepath()?;
     std::fs::write(&path, doc.to_string())
         .path_context(&path, "unable to write to the credentials file")

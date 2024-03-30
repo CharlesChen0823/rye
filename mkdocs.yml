@@ -21,6 +21,7 @@ nav:
     - Dependencies: guide/deps.md
     - Workspaces: guide/workspaces.md
     - Virtual Projects: guide/virtual.md
+    - Docker: guide/docker.md
     - Commands:
       - Overview: guide/commands/index.md
       - add: guide/commands/add.md
@@ -39,6 +40,7 @@ nav:
       - run: guide/commands/run.md
       - show: guide/commands/show.md
       - sync: guide/commands/sync.md
+      - test: guide/commands/test.md
       - toolchain:
         - Overview: guide/commands/toolchain/index.md
         - fetch: guide/commands/toolchain/fetch.md

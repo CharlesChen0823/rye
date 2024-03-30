@@ -6,7 +6,7 @@ use anyhow::{Context, Error};
 use once_cell::sync::Lazy;
 use pep440_rs::Operator;
 use regex::Regex;
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 use crate::platform::{get_app_dir, get_latest_cpython_version};
 use crate::pyproject::{BuildSystem, SourceRef, SourceRefType};
@@ -23,7 +23,7 @@ pub fn load() -> Result<(), Error> {
         Config::from_path(&cfg_path)?
     } else {
         Config {
-            doc: Document::new(),
+            doc: DocumentMut::new(),
             path: cfg_path,
         }
     };
@@ -33,7 +33,7 @@ pub fn load() -> Result<(), Error> {
 
 #[derive(Clone)]
 pub struct Config {
-    doc: Document,
+    doc: DocumentMut,
     path: PathBuf,
 }
 
@@ -49,12 +49,16 @@ impl Config {
     }
 
     /// Returns a clone of the internal doc.
-    pub fn doc_mut(&mut self) -> &mut Document {
+    pub fn doc_mut(&mut self) -> &mut DocumentMut {
         &mut self.doc
     }
 
     /// Saves changes back.
     pub fn save(&self) -> Result<(), Error> {
+        // try to make the parent folder if it does not exist.  ignore the error though.
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
         fs::write(&self.path, self.doc.to_string())
             .path_context(&self.path, "failed to save config")?;
         Ok(())
@@ -70,7 +74,7 @@ impl Config {
         let contents = fs::read_to_string(path).path_context(path, "failed to read config")?;
         Ok(Config {
             doc: contents
-                .parse::<Document>()
+                .parse::<DocumentMut>()
                 .path_context(path, "failed to parse config")?,
             path: path.to_path_buf(),
         })
@@ -256,11 +260,22 @@ impl Config {
             .unwrap_or_else(|| self.use_uv())
     }
 
-    /// Indicates if the experimental uv support should be used.
+    /// Indicates if uv should be used instead of pip-tools.
     pub fn use_uv(&self) -> bool {
         self.doc
             .get("behavior")
             .and_then(|x| x.get("use-uv"))
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Fetches python installations with build info if possible.
+    ///
+    /// This used to be the default behavior in Rye prior to 0.31.
+    pub fn fetch_with_build_info(&self) -> bool {
+        self.doc
+            .get("behavior")
+            .and_then(|x| x.get("fetch-with-build-info"))
             .and_then(|x| x.as_bool())
             .unwrap_or(false)
     }

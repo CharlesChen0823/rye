@@ -30,7 +30,7 @@ use pep508_rs::Requirement;
 use python_pkginfo::Metadata;
 use regex::Regex;
 use serde::Serialize;
-use toml_edit::{Array, Document, Formatted, Item, Table, TableLike, Value};
+use toml_edit::{Array, DocumentMut, Formatted, Item, Table, TableLike, Value};
 use url::Url;
 static NORMALIZATION_SPLIT_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[-_.]+").unwrap());
 
@@ -203,14 +203,15 @@ impl SourceRef {
 }
 
 type EnvVars = HashMap<String, String>;
+type EnvFile = Option<PathBuf>;
 
 /// A reference to a script
 #[derive(Clone, Debug)]
 pub enum Script {
     /// Call python module entry
-    Call(String, EnvVars),
+    Call(String, EnvVars, EnvFile),
     /// A command alias
-    Cmd(Vec<String>, EnvVars),
+    Cmd(Vec<String>, EnvVars, EnvFile),
     /// A multi-script execution
     Chain(Vec<Vec<String>>),
     /// External script reference
@@ -257,11 +258,19 @@ impl Script {
             env_vars
         }
 
+        fn get_env_file(detailed: &dyn TableLike) -> EnvFile {
+            detailed
+                .get("env-file")
+                .and_then(|x| x.as_str())
+                .map(PathBuf::from)
+        }
+
         if let Some(detailed) = item.as_table_like() {
             if let Some(call) = detailed.get("call") {
                 let entry = call.as_str()?.to_string();
                 let env_vars = get_env_vars(detailed);
-                Some(Script::Call(entry, env_vars))
+                let env_file = get_env_file(detailed);
+                Some(Script::Call(entry, env_vars, env_file))
             } else if let Some(cmds) = detailed.get("chain").and_then(|x| x.as_array()) {
                 Some(Script::Chain(
                     cmds.iter().flat_map(toml_value_as_command_args).collect(),
@@ -269,13 +278,14 @@ impl Script {
             } else if let Some(cmd) = detailed.get("cmd") {
                 let cmd = toml_value_as_command_args(cmd.as_value()?)?;
                 let env_vars = get_env_vars(detailed);
-                Some(Script::Cmd(cmd, env_vars))
+                let env_file = get_env_file(detailed);
+                Some(Script::Cmd(cmd, env_vars, env_file))
             } else {
                 None
             }
         } else {
             toml_value_as_command_args(item.as_value()?)
-                .map(|cmd| Script::Cmd(cmd, EnvVars::default()))
+                .map(|cmd| Script::Cmd(cmd, EnvVars::default(), None))
         }
     }
 }
@@ -288,7 +298,7 @@ fn shlex_quote_unsafe(s: &str) -> Cow<'_, str> {
 impl fmt::Display for Script {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Script::Call(entry, env) => {
+            Script::Call(entry, env, env_file) => {
                 write!(f, "{}", shlex_quote_unsafe(entry))?;
                 if !env.is_empty() {
                     write!(f, " (env: ")?;
@@ -305,9 +315,12 @@ impl fmt::Display for Script {
                     }
                     write!(f, ")")?;
                 }
+                if let Some(ref env_file) = env_file {
+                    write!(f, " (env-file: {})", env_file.display())?;
+                }
                 Ok(())
             }
-            Script::Cmd(args, env) => {
+            Script::Cmd(args, env, env_file) => {
                 let mut need_space = false;
                 for (key, value) in env.iter() {
                     if need_space {
@@ -327,6 +340,9 @@ impl fmt::Display for Script {
                     }
                     write!(f, "{}", shlex_quote_unsafe(arg))?;
                     need_space = true;
+                }
+                if let Some(ref env_file) = env_file {
+                    write!(f, " (env-file: {})", env_file.display())?;
                 }
                 Ok(())
             }
@@ -355,13 +371,13 @@ impl fmt::Display for Script {
 #[derive(Debug)]
 pub struct Workspace {
     root: PathBuf,
-    doc: Document,
+    doc: DocumentMut,
     members: Option<Vec<String>>,
 }
 
 impl Workspace {
     /// Loads a workspace from a pyproject.toml and path
-    fn try_load_from_toml(doc: &Document, path: &Path) -> Option<Workspace> {
+    fn try_load_from_toml(doc: &DocumentMut, path: &Path) -> Option<Workspace> {
         doc.get("tool")
             .and_then(|x| x.get("rye"))
             .and_then(|x| x.get("workspace"))
@@ -389,7 +405,7 @@ impl Workspace {
             let project_file = here.join("pyproject.toml");
             if project_file.is_file() {
                 if let Ok(contents) = fs::read_to_string(&project_file) {
-                    if let Ok(doc) = contents.parse::<Document>() {
+                    if let Ok(doc) = contents.parse::<DocumentMut>() {
                         if let Some(workspace) = Workspace::try_load_from_toml(&doc, here) {
                             return Some(workspace);
                         }
@@ -549,7 +565,7 @@ pub struct PyProject {
     root: PathBuf,
     basename: OsString,
     workspace: Option<Arc<Workspace>>,
-    doc: Document,
+    doc: DocumentMut,
 }
 
 impl PyProject {
@@ -578,7 +594,7 @@ impl PyProject {
         let root = filename.parent().unwrap_or(Path::new("."));
         let doc = fs::read_to_string(filename)
             .path_context(filename, "failed to read pyproject.toml")?
-            .parse::<Document>()
+            .parse::<DocumentMut>()
             .path_context(filename, "failed to parse pyproject.toml")?;
         let mut workspace = Workspace::try_load_from_toml(&doc, root).map(Arc::new);
 
@@ -618,7 +634,7 @@ impl PyProject {
     ) -> Result<Option<PyProject>, Error> {
         let root = filename.parent().unwrap_or(Path::new("."));
         let doc = fs::read_to_string(filename)?
-            .parse::<Document>()
+            .parse::<DocumentMut>()
             .with_context(|| {
                 format!(
                     "failed to parse pyproject.toml from '{}' in context of workspace {}",
@@ -806,12 +822,21 @@ impl PyProject {
             .get("build-system")
             .and_then(|x| x.get("build-backend"))
             .and_then(|x| x.as_str());
-        match backend {
+        let build_system = match backend {
             Some("hatchling.build") => Some(BuildSystem::Hatchling),
             Some("setuptools.build_meta") => Some(BuildSystem::Setuptools),
             Some("flit_core.buildapi") => Some(BuildSystem::Flit),
             Some("pdm.backend") => Some(BuildSystem::Pdm),
             _ => None,
+        };
+        if self.is_virtual() && build_system.is_some() {
+            warn!(
+                "project '{}' is virtual but defines build-system",
+                self.name().unwrap_or("")
+            );
+            None
+        } else {
+            build_system
         }
     }
     /// Looks up a script
@@ -1115,7 +1140,7 @@ pub fn latest_available_python_version(
 }
 
 fn resolve_target_python_version(
-    doc: &Document,
+    doc: &DocumentMut,
     root: &Path,
     venv_path: &Path,
 ) -> Option<PythonVersionRequest> {
@@ -1126,7 +1151,7 @@ fn resolve_target_python_version(
 }
 
 fn resolve_intended_venv_python_version(
-    doc: &Document,
+    doc: &DocumentMut,
     root: &Path,
 ) -> Result<PythonVersion, Error> {
     let requested_version = get_python_version_request_from_pyenv_pin(root)
@@ -1152,7 +1177,7 @@ fn resolve_intended_venv_python_version(
     }
 }
 
-fn resolve_lower_bound_python_version(doc: &Document) -> Option<PythonVersionRequest> {
+fn resolve_lower_bound_python_version(doc: &DocumentMut) -> Option<PythonVersionRequest> {
     doc.get("project")
         .and_then(|x| x.get("requires-python"))
         .and_then(|x| x.as_str())
@@ -1215,7 +1240,7 @@ fn is_unsafe_script(path: &Path) -> bool {
     }
 }
 
-fn get_sources(doc: &Document) -> Result<Vec<SourceRef>, Error> {
+fn get_sources(doc: &DocumentMut) -> Result<Vec<SourceRef>, Error> {
     let cfg = Config::current();
     let mut rv = Vec::new();
 
@@ -1244,7 +1269,7 @@ fn get_sources(doc: &Document) -> Result<Vec<SourceRef>, Error> {
     Ok(rv)
 }
 
-fn is_rye_managed(doc: &Document) -> bool {
+fn is_rye_managed(doc: &DocumentMut) -> bool {
     if Config::current().force_rye_managed() {
         return true;
     }
@@ -1255,7 +1280,7 @@ fn is_rye_managed(doc: &Document) -> bool {
         .unwrap_or(false)
 }
 
-fn lock_with_sources(doc: &Document) -> bool {
+fn lock_with_sources(doc: &DocumentMut) -> bool {
     doc.get("tool")
         .and_then(|x| x.get("rye"))
         .and_then(|x| x.get("lock-with-sources"))
@@ -1283,6 +1308,14 @@ pub struct ExpandedSources {
 }
 
 impl ExpandedSources {
+    pub fn empty() -> ExpandedSources {
+        ExpandedSources {
+            index_urls: Vec::new(),
+            find_links: Vec::new(),
+            trusted_hosts: HashSet::new(),
+        }
+    }
+
     /// Takes some sources and expands them.
     pub fn from_sources(sources: &[SourceRef]) -> Result<ExpandedSources, Error> {
         let mut index_urls = Vec::new();
@@ -1412,5 +1445,8 @@ pub fn locate_projects(
             }
         }
     }
+
+    projects.sort_by(|a, b| a.name().cmp(&b.name()));
+
     Ok(projects)
 }

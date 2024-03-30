@@ -95,10 +95,15 @@ autosync = true
 # `false` to disable this behavior.
 venv-mark-sync-ignore = true
 
+# When set to `true` Rye will fetch certain interpreters with build information.
+# This will increase the space requirements, will put the interpreter into an
+# extra folder called `./install/` and place build artifacts adjacent in `./build`.
+fetch-with-build-info = false
+
 # a array of tables with optional sources.  Same format as in pyproject.toml
 [[sources]]
 name = "default"
-url = "http://pypi.org/simple/"
+url = "https://pypi.org/simple/"
 ```
 
 ## Manipulating Config

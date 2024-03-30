@@ -61,18 +61,33 @@ toolchain = "cpython@3.12.2"
         .unwrap();
     }
 
-    // fetch the most important interpreters
-    for version in ["cpython@3.8.17", "cpython@3.11.8", "cpython@3.12.2"] {
+    // fetch the most important interpreters.  Fetch some with and some without
+    // build info to make sure we cover our grounds here.
+    for (version, build_info) in [
+        ("cpython@3.8.17", false),
+        ("cpython@3.11.8", true),
+        ("cpython@3.12.2", false),
+        ("pypy@3.10.13", false),
+    ] {
         if home.join("py").join(version).is_dir() {
             continue;
         }
         let status = Command::new(get_bin())
             .env("RYE_HOME", &home)
             .arg("fetch")
+            .arg(if build_info {
+                "--build-info"
+            } else {
+                "--no-build-info"
+            })
             .arg(version)
             .status()
             .unwrap();
         assert!(status.success());
+        assert_eq!(
+            home.join("py").join(version).join("install").is_dir(),
+            build_info
+        );
     }
 
     // make a dummy project to bootstrap it
@@ -139,7 +154,7 @@ impl Space {
     }
 
     #[allow(unused)]
-    pub fn load_toml<P: AsRef<Path>, R, F: FnOnce(&toml_edit::Document) -> R>(
+    pub fn load_toml<P: AsRef<Path>, R, F: FnOnce(&toml_edit::DocumentMut) -> R>(
         &self,
         path: P,
         f: F,
@@ -148,13 +163,13 @@ impl Space {
         let mut doc = if p.is_file() {
             std::fs::read_to_string(&p).unwrap().parse().unwrap()
         } else {
-            toml_edit::Document::default()
+            toml_edit::DocumentMut::default()
         };
         f(&doc)
     }
 
     #[allow(unused)]
-    pub fn edit_toml<P: AsRef<Path>, R, F: FnOnce(&mut toml_edit::Document) -> R>(
+    pub fn edit_toml<P: AsRef<Path>, R, F: FnOnce(&mut toml_edit::DocumentMut) -> R>(
         &self,
         path: P,
         f: F,
@@ -163,7 +178,7 @@ impl Space {
         let mut doc = if p.is_file() {
             std::fs::read_to_string(&p).unwrap().parse().unwrap()
         } else {
-            toml_edit::Document::default()
+            toml_edit::DocumentMut::default()
         };
         let rv = f(&mut doc);
         fs::create_dir_all(p.parent().unwrap()).ok();
@@ -172,7 +187,7 @@ impl Space {
     }
 
     #[allow(unused)]
-    pub fn read_toml<P: AsRef<Path>>(&self, path: P) -> toml_edit::Document {
+    pub fn read_toml<P: AsRef<Path>>(&self, path: P) -> toml_edit::DocumentMut {
         let p = self.project_path().join(path.as_ref());
         std::fs::read_to_string(p).unwrap().parse().unwrap()
     }
