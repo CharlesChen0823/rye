@@ -3,11 +3,29 @@
 This file contains tracks the changes landing in Rye.  It includes changes
 that were not yet released.
 
-## 0.33.0
+## 0.34.0
 
 _Unreleased_
 
+- Use uv in `rye build` when uv is enabled. #978
+
 <!-- released start -->
+
+## 0.33.0
+
+Released on 2024-04-24.
+
+- Ensure files created by `rye init`, such as `pyproject.toml` and initial python files end with a newline. #979
+
+- Add `--refresh` argument on `-f`.  #994
+
+- Preserve trailing newline in templates.  #979
+
+- Update uv to 0.1.37.  #980
+
+- Allow comments in `.python-version`.  #1038
+
+- Update Python releases to include 3.12.3 et al.  #1022
 
 ## 0.32.0
 
