@@ -1,5 +1,5 @@
 use crate::bootstrap::download_url;
-use crate::lock::make_project_root_fragment;
+use crate::lock::{make_project_root_fragment, KeyringProvider};
 use crate::platform::get_app_dir;
 use crate::pyproject::{read_venv_marker, write_venv_marker, ExpandedSources};
 use crate::sources::py::PythonVersion;
@@ -38,6 +38,8 @@ struct UvCompileOptions {
     pub upgrade: UvPackageUpgrade,
     pub no_deps: bool,
     pub no_header: bool,
+    pub keyring_provider: KeyringProvider,
+    pub generate_hashes: bool,
 }
 
 impl UvCompileOptions {
@@ -48,6 +50,10 @@ impl UvCompileOptions {
 
         if self.no_deps {
             cmd.arg("--no-deps");
+        }
+
+        if self.generate_hashes {
+            cmd.arg("--generate-hashes");
         }
 
         if self.allow_prerelease {
@@ -69,6 +75,13 @@ impl UvCompileOptions {
             }
             UvPackageUpgrade::Nothing => {}
         }
+
+        match self.keyring_provider {
+            KeyringProvider::Disabled => {}
+            KeyringProvider::Subprocess => {
+                cmd.arg("--keyring-provider").arg("subprocess");
+            }
+        }
     }
 }
 
@@ -80,6 +93,8 @@ impl Default for UvCompileOptions {
             upgrade: UvPackageUpgrade::Nothing,
             no_deps: false,
             no_header: false,
+            generate_hashes: false,
+            keyring_provider: KeyringProvider::Disabled,
         }
     }
 }
@@ -311,6 +326,7 @@ impl Uv {
         Ok(UvWithVenv::new(self.clone(), venv_dir, version))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn lockfile(
         &self,
         py_version: &PythonVersion,
@@ -319,6 +335,8 @@ impl Uv {
         allow_prerelease: bool,
         exclude_newer: Option<String>,
         upgrade: UvPackageUpgrade,
+        keyring_provider: KeyringProvider,
+        generate_hashes: bool,
     ) -> Result<(), Error> {
         let options = UvCompileOptions {
             allow_prerelease,
@@ -326,6 +344,8 @@ impl Uv {
             upgrade,
             no_deps: false,
             no_header: true,
+            generate_hashes,
+            keyring_provider,
         };
 
         let mut cmd = self.cmd();
@@ -560,6 +580,7 @@ impl UvWithVenv {
         requirement: &Requirement,
         allow_prerelease: bool,
         exclude_newer: Option<String>,
+        keyring_provider: KeyringProvider,
     ) -> Result<Requirement, Error> {
         let mut cmd = self.venv_cmd();
         let options = UvCompileOptions {
@@ -568,6 +589,8 @@ impl UvWithVenv {
             upgrade: UvPackageUpgrade::Nothing,
             no_deps: true,
             no_header: true,
+            generate_hashes: false,
+            keyring_provider,
         };
 
         cmd.arg("pip").arg("compile");
