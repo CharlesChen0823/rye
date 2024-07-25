@@ -34,7 +34,7 @@ pub struct Args {
     /// Update to pre-release versions
     #[arg(long)]
     pre: bool,
-    /// Extras/features to enable when synching the workspace.
+    /// Extras/features to enable when syncing the workspace.
     #[arg(long)]
     features: Vec<String>,
     /// Enables all features.
@@ -46,15 +46,18 @@ pub struct Args {
     /// Attempt to use `keyring` for authentication for index URLs.
     #[arg(long, value_enum, default_value_t)]
     keyring_provider: KeyringProvider,
+    /// Set to true to lock with hashes in the lockfile.
+    #[arg(long)]
+    generate_hashes: bool,
     /// Use this pyproject.toml file
     #[arg(long, value_name = "PYPROJECT_TOML")]
     pyproject: Option<PathBuf>,
     /// Do not reuse (reset) prior lock options.
     #[arg(long)]
     reset: bool,
-    /// Set to true to lock with hashes in the lockfile.
+    /// Use universal lock files
     #[arg(long)]
-    generate_hashes: bool,
+    universal: bool,
 }
 
 pub fn execute(cmd: Args) -> Result<(), Error> {
@@ -78,6 +81,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             with_sources: cmd.with_sources,
             reset: cmd.reset,
             generate_hashes: cmd.generate_hashes,
+            universal: cmd.universal,
         },
         keyring_provider: cmd.keyring_provider,
         pyproject: cmd.pyproject,

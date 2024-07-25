@@ -2,7 +2,7 @@
 
 Updates the lockfiles and installs the dependencies into the virtualenv.
 
-For more information see [Synching and Locking](../sync.md).
+For more information see [Syncing and Locking](../sync.md).
 
 ## Example
 
@@ -52,6 +52,8 @@ To exit the sub shell run `exit`.
 * `--features <FEATURES>`: Extras/features to enable when locking the workspace
 
 * `--all-features`: Enables all features
+
+* `--generate-hashes`: Set to true to lock with hashes in the lockfile
 
 * `--with-sources`: Set to true to lock with sources in the lockfile
 

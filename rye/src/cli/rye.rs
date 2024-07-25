@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Error};
+use clap::builder::PossibleValue;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{Generator, Shell};
 use clap_complete_nushell::Nushell;
@@ -53,7 +54,7 @@ pub struct Args {
     command: SubCommand,
 }
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug)]
 enum ShellCompletion {
     /// Bourne Again SHell (bash)
     Bash,
@@ -67,6 +68,32 @@ enum ShellCompletion {
     Zsh,
     /// Nushell
     Nushell,
+}
+
+impl ValueEnum for ShellCompletion {
+    /// Returns the variants for the shell completion.
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            ShellCompletion::Bash,
+            ShellCompletion::Elvish,
+            ShellCompletion::Fish,
+            ShellCompletion::PowerShell,
+            ShellCompletion::Zsh,
+            ShellCompletion::Nushell,
+        ]
+    }
+
+    /// Returns the possible value for the shell completion.
+    fn to_possible_value<'a>(&self) -> Option<PossibleValue> {
+        Some(match self {
+            ShellCompletion::Bash => PossibleValue::new("bash"),
+            ShellCompletion::Elvish => PossibleValue::new("elvish"),
+            ShellCompletion::Fish => PossibleValue::new("fish"),
+            ShellCompletion::PowerShell => PossibleValue::new("powershell"),
+            ShellCompletion::Zsh => PossibleValue::new("zsh"),
+            ShellCompletion::Nushell => PossibleValue::new("nushell"),
+        })
+    }
 }
 
 impl Generator for ShellCompletion {
@@ -533,7 +560,7 @@ fn perform_install(
         echo!("automatically started the installer for you. For more information");
         echo!(
             "read {}",
-            style("https://rye-up.com/guide/installation/").yellow()
+            style("https://rye.astral.sh/guide/installation/").yellow()
         );
     }
 
@@ -571,7 +598,7 @@ fn perform_install(
         echo!("enable symlinks. You need to enable this before continuing the setup.");
         echo!(
             "Learn more at {}",
-            style("https://rye-up.com/guide/faq/#windows-developer-mode").yellow()
+            style("https://rye.astral.sh/guide/faq/#windows-developer-mode").yellow()
         );
     }
 
@@ -590,15 +617,15 @@ fn perform_install(
         .get("behavior")
         .and_then(|x| x.get("use-uv"))
         .is_none()
-        && !matches!(mode, InstallMode::NoPrompts)
     {
-        let use_uv = dialoguer::Select::with_theme(tui_theme())
-            .with_prompt("Select the preferred package installer")
-            .item("uv (fast, recommended)")
-            .item("pip-tools (slow, higher compatibility)")
-            .default(0)
-            .interact()?
-            == 0;
+        let use_uv = matches!(mode, InstallMode::NoPrompts)
+            || dialoguer::Select::with_theme(tui_theme())
+                .with_prompt("Select the preferred package installer")
+                .item("uv (fast, recommended)")
+                .item("pip-tools (slow, higher compatibility)")
+                .default(0)
+                .interact()?
+                == 0;
         toml::ensure_table(config_doc, "behavior")["use-uv"] = toml_edit::value(use_uv);
     }
 
@@ -782,7 +809,7 @@ fn add_rye_to_path(mode: &InstallMode, shims: &Path, ask: bool) -> Result<(), Er
                 );
                 echo!();
             }
-            echo!("For more information read https://rye-up.com/guide/installation/");
+            echo!("For more information read https://rye.astral.sh/guide/installation/");
         }
     }
     // On Windows, we add the rye directory to the user's PATH unconditionally.

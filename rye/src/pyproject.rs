@@ -152,14 +152,15 @@ impl SourceRef {
             .get("name")
             .and_then(|x| x.as_str())
             .map(|x| x.to_string())
-            .ok_or_else(|| anyhow!("expected name"))?;
+            .ok_or_else(|| anyhow!("expected source.name"))?;
         let url = source
             .get("url")
             .and_then(|x| x.as_str())
             .map(|x| x.to_string())
-            .ok_or_else(|| anyhow!("expected url"))?;
+            .ok_or_else(|| anyhow!("expected source.url"))?;
         let verify_ssl = source
             .get("verify_ssl")
+            .or_else(|| source.get("verify-ssl"))
             .and_then(|x| x.as_bool())
             .unwrap_or(true);
         let username = source
@@ -174,7 +175,7 @@ impl SourceRef {
             .get("type")
             .and_then(|x| x.as_str())
             .map_or(Ok(SourceRefType::Index), |x| x.parse::<SourceRefType>())
-            .context("invalid value for type")?;
+            .context("invalid value for source.type")?;
         Ok(SourceRef {
             name,
             url,
@@ -535,6 +536,16 @@ impl Workspace {
         is_rye_managed(&self.doc)
     }
 
+    /// Should requirements.txt based locking include generating hashes?
+    pub fn generate_hashes(&self) -> bool {
+        generate_hashes(&self.doc)
+    }
+
+    /// Should requirements.txt based locking be universal
+    pub fn universal(&self) -> bool {
+        universal(&self.doc)
+    }
+
     /// Should requirements.txt based locking include a find-links reference?
     pub fn lock_with_sources(&self) -> bool {
         lock_with_sources(&self.doc)
@@ -566,6 +577,13 @@ pub struct PyProject {
     basename: OsString,
     workspace: Option<Arc<Workspace>>,
     doc: DocumentMut,
+}
+
+/// Returns an implicit table.
+fn implicit() -> Item {
+    let mut table = Table::new();
+    table.set_implicit(true);
+    Item::Table(table)
 }
 
 impl PyProject {
@@ -901,8 +919,14 @@ impl PyProject {
     ) -> Result<(), Error> {
         let dependencies = match kind {
             DependencyKind::Normal => &mut self.doc["project"]["dependencies"],
-            DependencyKind::Dev => &mut self.doc["tool"]["rye"]["dev-dependencies"],
-            DependencyKind::Excluded => &mut self.doc["tool"]["rye"]["excluded-dependencies"],
+            DependencyKind::Dev => self
+                .obtain_tool_config_table()?
+                .entry("dev-dependencies")
+                .or_insert(Item::Value(Value::Array(Array::new()))),
+            DependencyKind::Excluded => self
+                .obtain_tool_config_table()?
+                .entry("excluded-dependencies")
+                .or_insert(Item::Value(Value::Array(Array::new()))),
             DependencyKind::Optional(ref section) => {
                 // add this as a proper non-inline table if it's missing
                 let table = &mut self.doc["project"]["optional-dependencies"];
@@ -932,8 +956,14 @@ impl PyProject {
     ) -> Result<Option<Requirement>, Error> {
         let dependencies = match kind {
             DependencyKind::Normal => &mut self.doc["project"]["dependencies"],
-            DependencyKind::Dev => &mut self.doc["tool"]["rye"]["dev-dependencies"],
-            DependencyKind::Excluded => &mut self.doc["tool"]["rye"]["excluded-dependencies"],
+            DependencyKind::Dev => self
+                .obtain_tool_config_table()?
+                .entry("dev-dependencies")
+                .or_insert(Item::Value(Value::Array(Array::new()))),
+            DependencyKind::Excluded => self
+                .obtain_tool_config_table()?
+                .entry("excluded-dependencies")
+                .or_insert(Item::Value(Value::Array(Array::new()))),
             DependencyKind::Optional(ref section) => {
                 &mut self.doc["project"]["optional-dependencies"][section as &str]
             }
@@ -1006,7 +1036,23 @@ impl PyProject {
             .unwrap_or(false)
     }
 
-    /// Should requirements.txt based locking include a find-links reference?
+    /// Should requirements.txt-based locking include generating hashes?
+    pub fn generate_hashes(&self) -> bool {
+        match self.workspace {
+            Some(ref workspace) => workspace.generate_hashes(),
+            None => generate_hashes(&self.doc),
+        }
+    }
+
+    /// Should requirements.txt-based locking be universal?
+    pub fn universal(&self) -> bool {
+        match self.workspace {
+            Some(ref workspace) => workspace.universal(),
+            None => universal(&self.doc),
+        }
+    }
+
+    /// Should requirements.txt-based locking include a find-links reference?
     pub fn lock_with_sources(&self) -> bool {
         match self.workspace {
             Some(ref workspace) => workspace.lock_with_sources(),
@@ -1019,6 +1065,19 @@ impl PyProject {
         let path = self.toml_path();
         fs::write(&path, self.doc.to_string()).path_context(&path, "unable to write changes")?;
         Ok(())
+    }
+
+    /// Gets or creates the [tool.rye] table in pyproject.toml
+    fn obtain_tool_config_table(&mut self) -> Result<&mut Table, Error> {
+        self.doc
+            .entry("tool")
+            .or_insert(implicit())
+            .as_table_mut()
+            .ok_or(anyhow!("[tool.rye] in pyproject.toml is malformed"))?
+            .entry("rye")
+            .or_insert(implicit())
+            .as_table_mut()
+            .ok_or(anyhow!("[tool.rye] in pyproject.toml is malformed"))
     }
 }
 
@@ -1252,7 +1311,8 @@ fn get_sources(doc: &DocumentMut) -> Result<Vec<SourceRef>, Error> {
     {
         for source in sources {
             let source = source.context("invalid value for pyproject.toml's tool.rye.sources")?;
-            let source_ref = SourceRef::from_toml_table(source)?;
+            let source_ref = SourceRef::from_toml_table(source)
+                .context("invalid source definition in pyproject.toml")?;
             rv.push(source_ref);
         }
     }
@@ -1280,6 +1340,22 @@ fn is_rye_managed(doc: &DocumentMut) -> bool {
         .unwrap_or(false)
 }
 
+fn generate_hashes(doc: &DocumentMut) -> bool {
+    doc.get("tool")
+        .and_then(|x| x.get("rye"))
+        .and_then(|x| x.get("generate-hashes"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false)
+}
+
+fn universal(doc: &DocumentMut) -> bool {
+    doc.get("tool")
+        .and_then(|x| x.get("rye"))
+        .and_then(|x| x.get("universal"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false)
+}
+
 fn lock_with_sources(doc: &DocumentMut) -> bool {
     doc.get("tool")
         .and_then(|x| x.get("rye"))
@@ -1299,6 +1375,7 @@ fn get_project_metadata(path: &Path) -> Result<Metadata, Error> {
     }
     serde_json::from_slice(&metadata.stdout).map_err(Into::into)
 }
+
 /// Represents expanded sources.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExpandedSources {
